@@ -42,7 +42,7 @@ VOLUMES = {
 XML_DIR = Path("xml")
 OUT_DIR = Path("data")
 # Bump when the per-volume JSON layout changes so cached outputs are rebuilt.
-SCHEMA = 7
+SCHEMA = 8
 
 # Research-topic lexicon: share of papers whose title or abstract matches.
 TOPICS = {
@@ -283,7 +283,8 @@ def build_event(vol_id: str, xml_dir: Path, out_dir: Path,
     out_dir.mkdir(exist_ok=True)
     for data in datasets:
         out_path = out_dir / f"{data['id']}.json"
-        out_path.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        out_path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")),
+                            encoding="utf-8")
         print(f"{data['id']}: {data['stats']['unique_authors']} authors, "
               f"{data['stats']['papers']} papers -> {out_path}")
     return [_index_entry(d) for d in datasets]
@@ -406,14 +407,12 @@ def aggregate(out_id: str, conference: str, year: int, scope: str, title: str,
             {
                 "key": key,
                 "name": rec["name"],
-                # Person ID usable for an Anthology profile link; None for
-                # ambiguous buckets that may merge several people.
-                "id": None if rec["ambiguous"] else key.lstrip("~"),
+                # The Anthology person ID (key without "~", absent for ambiguous
+                # buckets) and co-author counts are derived client-side.
                 "ambiguous": rec["ambiguous"],
                 "namesakes": keys_per_name[rec["name"]] - 1,
                 "papers": rec["papers"],
                 "first_author": rec["first_author"],
-                "coauthors": dict(rec["coauthors"].most_common()),
                 "affiliations": [a for a, _ in rec["affiliations"].most_common()],
             }
             for key, rec in sorted(

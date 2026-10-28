@@ -677,6 +677,7 @@ function buildNav() {
         el('span', { text: e.year }), el('span', { class: 'n', text: fmt(e.papers) }));
       b.classList.toggle('active', e.id === currentId);
       b.addEventListener('click', () => { location.hash = e.id; });
+      b.addEventListener('pointerenter', () => getDataset(e.id), { once: true });
       g.append(b);
     }
     nav.append(g);
@@ -693,16 +694,54 @@ function buildScopes() {
       label, el('span', { class: 'n', text: e ? fmt(e.papers) : '—' }));
     b.disabled = !e;
     b.classList.toggle('active', scope === scopeOf());
-    if (e) b.addEventListener('click', () => { location.hash = e.id; });
+    if (e) {
+      b.addEventListener('click', () => { location.hash = e.id; });
+      b.addEventListener('pointerenter', () => getDataset(e.id), { once: true });
+    }
     host.append(b);
   }
 }
 
+/* Loaded datasets (id -> Promise), most recent last; hovering a link prefetches. */
+const DATASETS = new Map();
+const DATASET_CACHE = 6;
+function getDataset(id) {
+  let p = DATASETS.get(id);
+  if (p) DATASETS.delete(id);
+  else {
+    p = loadJSON(`data/${id}.json`).then(prepareDataset);
+    p.catch(() => DATASETS.delete(id));
+  }
+  DATASETS.set(id, p);
+  while (DATASETS.size > DATASET_CACHE) DATASETS.delete(DATASETS.keys().next().value);
+  return p;
+}
+
+/* Fields left out of the JSON to keep downloads small: Anthology person ID and co-author counts. */
+function prepareDataset(d) {
+  const co = new Map(d.authors.map(a => [a.key, new Map()]));
+  for (const p of d.papers) for (const a of p.authors) {
+    const m = co.get(a);
+    for (const b of p.authors) if (b !== a) m.set(b, (m.get(b) || 0) + 1);
+  }
+  for (const a of d.authors) {
+    a.id = a.ambiguous ? null : a.key.replace(/^~/, '');
+    a.coauthors = co.get(a.key);
+  }
+  return d;
+}
+
+let selectSeq = 0;
 async function selectVolume(id, push = true) {
+  const seq = ++selectSeq;
   document.querySelectorAll('main .error').forEach(e => e.remove());
+  $('src').textContent = `Loading ${id}…`;
   try {
-    DATA = await loadJSON(`data/${id}.json`);
+    const d = await getDataset(id);
+    if (seq !== selectSeq) return;  // a later selection superseded this one
+    DATA = d;
   } catch (e) {
+    if (seq !== selectSeq) return;
     document.querySelectorAll('.nav-vol').forEach(b =>
       b.classList.toggle('active', b.dataset.id === currentId));
     if (currentId && location.hash !== '#' + currentId) location.hash = currentId;
@@ -726,7 +765,7 @@ async function selectVolume(id, push = true) {
   AUTHORS = new Map(DATA.authors.map(a => [a.key, a]));
   authorsView = DATA.authors.map((a, i) => ({
     rank: i + 1, name: a.name, papers: a.papers.length, first: a.first_author.length,
-    ncoauth: Object.keys(a.coauthors).length, raw: a,
+    ncoauth: a.coauthors.size, raw: a,
     search: `${a.name} ${a.affiliations.join(' ')} ${a.id || ''}`.toLowerCase(),
   }));
   const n = DATA.stats.papers;
@@ -746,12 +785,17 @@ async function selectVolume(id, push = true) {
     };
   });
   INST_MULTI = collab.multi; INST_WITH = collab.withInst; INST_STATS = collab;
-  renderOverview();
-  render();
-  renderInst();
-  renderCollab();
-  renderTopics();
-  if (activeTab === 'trends') renderTrends();
+  renderedTabs.clear();
+  renderActiveTab();
+}
+
+/* Tabs render on first view per dataset; hidden tabs cost nothing on dataset switch. */
+const renderedTabs = new Set();
+function renderActiveTab() {
+  if (renderedTabs.has(activeTab)) return;
+  renderedTabs.add(activeTab);
+  ({ overview: renderOverview, authors: render, inst: renderInst, collab: renderCollab,
+     topics: renderTopics, trends: renderTrends })[activeTab]();
 }
 
 /* Overview */
@@ -863,6 +907,9 @@ function markSort(attr, key, dir) {
 function emptyRow(tbody, cols, text) {
   tbody.append(el('tr', {}, el('td', { colspan: cols, class: 'muted', text })));
 }
+// Tables render the first MAX_ROWS rows of the sorted/filtered list; filter to see others.
+const MAX_ROWS = 500;
+const shownNote = n => n > MAX_ROWS ? ` (top ${MAX_ROWS} shown — filter to narrow)` : '';
 
 /* Authors */
 function render() {
@@ -871,12 +918,12 @@ function render() {
   const rows = sortRows(authorsView.filter(a => a.papers >= min && a.search.includes(q)),
     sortKey, sortDir);
   markSort('data-k', sortKey, sortDir);
-  $('count').textContent = `${fmt(rows.length)} authors`;
+  $('count').textContent = `${fmt(rows.length)} authors` + shownNote(rows.length);
   const tbody = $('rows');
   tbody.textContent = '';
   if (!rows.length) return emptyRow(tbody, 5, 'No authors match.');
   const maxP = authorsView[0] ? authorsView[0].papers : 1;
-  for (const a of rows.slice(0, 2000)) {
+  for (const a of rows.slice(0, MAX_ROWS)) {
     const btn = el('button', { class: 'name-btn', text: a.name });
     btn.addEventListener('click', () => openPanel(a.raw, btn));
     const cell = el('td', {}, btn);
@@ -910,7 +957,7 @@ function openPanel(a, trigger) {
   $('panel').setAttribute('aria-label', 'Author detail');
   $('p-name').textContent = a.name;
   $('p-stats').textContent = `${a.papers.length} papers · ${a.first_author.length} first-authored · ` +
-    `${Object.keys(a.coauthors).length} co-authors`;
+    `${a.coauthors.size} co-authors`;
   $('p-affs').textContent = (a.affiliations && a.affiliations.length) ? a.affiliations.join(' · ') : '';
   const pid = $('p-id');
   pid.textContent = '';
@@ -936,7 +983,7 @@ function openPanel(a, trigger) {
     pubs.append(div);
   }
   const collab = $('p-collab');
-  const entries = Object.entries(a.coauthors).sort((x, y) => y[1] - x[1]).slice(0, 15);
+  const entries = [...a.coauthors.entries()].sort((x, y) => y[1] - x[1]).slice(0, 15);
   if (!entries.length) { collab.className = 'muted'; collab.textContent = 'No co-authors.'; }
   else hbars(collab, entries.map(([key, n]) => {
     const c = AUTHORS.get(key);
@@ -1182,11 +1229,11 @@ function renderInst() {
   const rows = sortRows(instView.filter(x => x.papers >= min && x.name.toLowerCase().includes(q)),
     isortKey, isortDir);
   markSort('data-ik', isortKey, isortDir);
-  $('icount').textContent = instView.length ? `${fmt(rows.length)} institutions` : '';
+  $('icount').textContent = instView.length ? `${fmt(rows.length)} institutions` + shownNote(rows.length) : '';
   const tbody = $('irows');
   tbody.textContent = '';
   if (!rows.length) return instView.length ? emptyRow(tbody, 13, 'No institutions match.') : undefined;
-  for (const x of rows.slice(0, 2000)) {
+  for (const x of rows.slice(0, MAX_ROWS)) {
     const btn = el('button', { class: 'name-btn', text: x.name });
     btn.addEventListener('click', () => openInstPanel(x, btn));
     tbody.append(el('tr', {},
@@ -1371,21 +1418,32 @@ async function renderPairTrends() {
 }
 
 function renderAuthorTeams() {
+  // Numeric author indices; a trio can only reach 2 papers if each of its pairs does,
+  // so trios are counted only over pairs that already repeat.
+  const idx = new Map(DATA.authors.map((a, i) => [a.key, i]));
+  const N = DATA.authors.length;
+  const teams = DATA.papers.map(p => p.authors.length > 25 ? null  // consortium papers swamp counts
+    : p.authors.map(k => idx.get(k)).sort((x, y) => x - y));
   const pairs = new Map(), trios = new Map();
-  for (const p of DATA.papers) {
-    const a = [...p.authors].sort();
-    if (a.length > 25) continue;  // consortium papers would swamp the counts
+  for (const a of teams) if (a)
+    for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) inc(pairs, a[i] * N + a[j]);
+  const rep = (x, y) => (pairs.get(x * N + y) || 0) >= 2;
+  for (const a of teams) if (a)
     for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
-      inc(pairs, `${a[i]}\t${a[j]}`);
-      for (let k = j + 1; k < a.length; k++) inc(trios, `${a[i]}\t${a[j]}\t${a[k]}`);
+      if (!rep(a[i], a[j])) continue;
+      for (let k = j + 1; k < a.length; k++)
+        if (rep(a[i], a[k]) && rep(a[j], a[k])) inc(trios, (a[i] * N + a[j]) * N + a[k]);
     }
-  }
-  const label = k => k.split('\t').map(x => AUTHORS.get(x)?.name ?? x).join(' + ');
-  const rows = m => [...m.entries()].filter(([, n]) => n >= 2)
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 15)
-    .map(([k, n]) => ({ label: label(k), value: n, text: `${n} papers`, tip: `${label(k)}: ${n} joint papers` }));
-  barsOrNone($('apairs'), rows(pairs), 'No pair co-authored 2+ papers.');
-  barsOrNone($('atrios'), rows(trios), 'No trio co-authored 2+ papers.');
+  const name = i => DATA.authors[i].name;
+  const rows = (m, size) => [...m.entries()].filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 15).map(([k, n]) => {
+      const ids = [];
+      for (let s = 0; s < size; s++) { ids.unshift(k % N); k = Math.floor(k / N); }
+      const label = ids.map(name).join(' + ');
+      return { label, value: n, text: `${n} papers`, tip: `${label}: ${n} joint papers` };
+    });
+  barsOrNone($('apairs'), rows(pairs, 2), 'No pair co-authored 2+ papers.');
+  barsOrNone($('atrios'), rows(trios, 3), 'No trio co-authored 2+ papers.');
 }
 
 function renderAwards() {
@@ -1577,10 +1635,8 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
   for (const v of ['overview', 'authors', 'inst', 'collab', 'topics', 'trends'])
     $(`view-${v}`).hidden = activeTab !== v;
-  if (activeTab === 'trends') {
-    if (DATA) $('trend-conf').value = DATA.conference;
-    renderTrends();
-  }
+  if (activeTab === 'trends' && !renderedTabs.has('trends') && DATA) $('trend-conf').value = DATA.conference;
+  if (DATA) renderActiveTab();
 }));
 $('iq').addEventListener('input', renderInst);
 $('imin').addEventListener('input', renderInst);
