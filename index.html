@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ACL Anthology — Author Statistics</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg:#f7f8fb; --card:#ffffff; --fg:#171a21; --muted:#5c6572; --border:#e3e7ee;
+    --surface:#f1f3f7; --accent:#3b63d6; --accent-soft:#e8eefc; --pos:#1f8a4c; --neg:#c0392b;
+    --shadow:0 1px 2px rgb(16 24 40/.05), 0 1px 3px rgb(16 24 40/.06);
+    --shadow-lg:0 12px 40px rgb(0 0 0/.16);
+    --c1:#3b63d6; --c2:#e07b24; --c3:#1f9e6e; --c4:#c2399b; --c5:#7a5bd6; --c6:#8a6d1f;
+    --radius:12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f131a; --card:#161b24; --fg:#e6e9ef; --muted:#98a2b3; --border:#273040;
+      --surface:#1b222d; --accent:#7da2ff; --accent-soft:#1d2a45; --pos:#4cc38a; --neg:#ff7a6b;
+      --shadow:none; --shadow-lg:0 12px 40px rgb(0 0 0/.55);
+      --c1:#7da2ff; --c2:#f5a25d; --c3:#4cc38a; --c4:#f07acb; --c5:#a990ff; --c6:#d8b54a;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { font:15px/1.55 "Segoe UI", system-ui, sans-serif; color:var(--fg);
+    margin:0; background:var(--bg); }
+  .layout { display:grid; grid-template-columns:220px 1fr; min-height:100vh; }
+
+  /* Sidebar */
+  aside.nav { border-right:1px solid var(--border); background:var(--card);
+    padding:1.25rem .75rem; position:sticky; top:0; height:100vh; overflow-y:auto; }
+  .brand { font-weight:700; font-size:1rem; padding:0 .5rem 1.1rem; display:flex;
+    gap:.6rem; align-items:center; }
+  .brand .logo { width:30px; height:30px; border-radius:8px; background:var(--accent);
+    color:#fff; display:grid; place-items:center; font-size:.8rem; flex:none; }
+  .brand small { display:block; font-weight:400; color:var(--muted); font-size:.72rem; }
+  .nav-group { margin-bottom:.9rem; }
+  .nav-conf { font-size:.7rem; font-weight:700; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--muted); padding:.25rem .5rem; }
+  .nav-vol { display:flex; justify-content:space-between; width:100%; border:0;
+    background:none; color:var(--fg); font:inherit; font-size:.88rem; padding:.3rem .55rem;
+    border-radius:7px; cursor:pointer; }
+  .nav-vol:hover { background:var(--surface); }
+  .nav-vol.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+  .nav-vol .n { color:var(--muted); font-size:.75rem; font-variant-numeric:tabular-nums; }
+
+  /* Main */
+  main { padding:0 2rem 3rem; max-width:1240px; min-width:0; }
+  header.main-h { position:sticky; top:0; background:var(--bg); z-index:5;
+    padding:1.1rem 0 0; border-bottom:1px solid var(--border); }
+  .eyebrow { font-size:.75rem; font-weight:700; letter-spacing:.08em; color:var(--accent);
+    text-transform:uppercase; }
+  h1 { font-size:1.35rem; margin:.1rem 0 .1rem; letter-spacing:-.01em; line-height:1.3; }
+  .muted { color:var(--muted); font-size:.85rem; }
+  .tabs { display:flex; gap:.25rem; margin-top:.6rem; overflow-x:auto; }
+  .scopes { display:inline-flex; gap:2px; margin-top:.5rem; padding:3px; border-radius:9px;
+    background:var(--surface); border:1px solid var(--border); flex-wrap:wrap; }
+  .scope { border:0; background:none; font:inherit; font-size:.82rem; font-weight:600;
+    color:var(--muted); padding:.25rem .75rem; border-radius:6px; cursor:pointer; }
+  .scope:hover:not(:disabled) { color:var(--fg); }
+  .scope.active { background:var(--card); color:var(--accent); box-shadow:var(--shadow); }
+  .scope:disabled { opacity:.4; cursor:not-allowed; }
+  .scope .n { font-weight:400; color:var(--muted); margin-left:.3rem; font-size:.75rem;
+    font-variant-numeric:tabular-nums; }
+  .tab { border:0; background:none; font:inherit; font-weight:600; color:var(--muted);
+    padding:.5rem .9rem; cursor:pointer; border-bottom:2px solid transparent; white-space:nowrap; }
+  .tab:hover { color:var(--fg); }
+  .tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr));
+    gap:.75rem; margin:1.25rem 0; }
+  .card, .panel-box { background:var(--card); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow); }
+  .card { padding:.85rem 1rem; }
+  .card .label { color:var(--muted); font-size:.78rem; display:block; }
+  .card b { display:block; font-size:1.5rem; font-variant-numeric:tabular-nums;
+    letter-spacing:-.01em; }
+  .delta { font-size:.75rem; font-weight:600; font-variant-numeric:tabular-nums; }
+  .delta.up { color:var(--pos); } .delta.down { color:var(--neg); }
+  .delta.flat { color:var(--muted); font-weight:400; }
+
+  .grid2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:1rem; }
+  .panel-box { padding:1rem 1.1rem 1.1rem; min-width:0; margin-bottom:1rem; }
+  .panel-box h2 { font-size:.95rem; margin:0 0 .15rem; }
+  .panel-box .sub { color:var(--muted); font-size:.8rem; margin:0 0 .6rem; }
+  h2 { font-size:1.05rem; margin:1.5rem 0 .6rem; }
+
+  /* SVG charts */
+  svg.chart { width:100%; height:auto; display:block; overflow:visible; }
+  svg.chart text { fill:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; }
+  svg.chart .grid { stroke:var(--border); }
+  svg.chart .bar { fill:var(--accent); }
+  svg.chart .bar:hover, svg.chart .pt:hover { opacity:.75; }
+  svg.chart .line { fill:none; stroke-width:2.2; }
+  .legend { display:flex; flex-wrap:wrap; gap:.4rem .9rem; font-size:.8rem; margin:.25rem 0 .5rem; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:10px;
+    border-radius:3px; background:var(--sw); margin-right:.35rem; vertical-align:-1px; }
+  #tip { position:fixed; pointer-events:none; z-index:40; background:var(--fg); color:var(--bg);
+    font-size:.78rem; padding:.3rem .55rem; border-radius:6px; opacity:0; transition:opacity .1s;
+    white-space:nowrap; }
+
+  /* Horizontal bars (HTML) */
+  .hbars { display:grid; grid-template-columns:minmax(120px,max-content) 1fr auto;
+    gap:.3rem .65rem; align-items:center; font-size:.84rem; }
+  .hbars .lab { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px; }
+  .hbars .track { background:var(--surface); border-radius:4px; height:12px; position:relative; }
+  .hbars .fill { background:var(--accent); border-radius:4px; height:100%; }
+  .hbars .ghost { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--fg);
+    opacity:.55; border-radius:1px; }
+  .hbars .val { color:var(--muted); font-variant-numeric:tabular-nums; text-align:right;
+    font-size:.78rem; }
+
+  /* Stacked bar */
+  .stack { display:flex; height:22px; border-radius:6px; overflow:hidden; margin:.4rem 0 .6rem; }
+  .stack div { min-width:2px; }
+
+  /* Meters */
+  .meter { margin:.55rem 0; }
+  .meter .top { display:flex; justify-content:space-between; font-size:.84rem; }
+  .meter .top b { font-variant-numeric:tabular-nums; }
+  .meter .track { background:var(--surface); height:8px; border-radius:4px; margin:.25rem 0 .1rem; }
+  .meter .fill { background:var(--accent); height:100%; border-radius:4px; }
+  .meter .hint { color:var(--muted); font-size:.75rem; }
+
+  /* Heatmap */
+  table.heat { font-size:.8rem; }
+  table.heat td, table.heat th { text-align:center; padding:.35rem .4rem; border:0;
+    position:static; cursor:default; background:none; }
+  table.heat th:first-child, table.heat td:first-child { text-align:left; white-space:nowrap; }
+  table.heat td.cell { border-radius:4px; font-variant-numeric:tabular-nums; }
+
+  /* Word cloud-ish term list */
+  .terms { display:flex; flex-wrap:wrap; gap:.35rem .5rem; align-items:baseline; }
+  .terms span { color:var(--accent); line-height:1.2; }
+  .terms span small { color:var(--muted); font-size:.7rem; margin-left:.15rem; }
+
+  .controls { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; margin:.25rem 0 .9rem; }
+  input, select { padding:.45rem .65rem; border:1px solid var(--border); border-radius:8px;
+    background:var(--card); color:var(--fg); font:inherit; }
+  input:focus, select:focus, button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  input[type=search] { flex:1; min-width:200px; }
+  .count { color:var(--muted); font-size:.85rem; margin-left:auto; }
+  label { font-size:.85rem; color:var(--muted); }
+
+  .table-wrap { background:var(--card); border:1px solid var(--border);
+    border-radius:var(--radius); box-shadow:var(--shadow); overflow:clip; }
+  table { border-collapse:collapse; width:100%; font-size:.88rem; }
+  th, td { padding:.5rem .75rem; border-bottom:1px solid var(--border); text-align:left; }
+  tbody tr:last-child td { border-bottom:0; }
+  th { cursor:pointer; user-select:none; background:var(--surface); position:sticky;
+    top:var(--hdr,128px); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em;
+    color:var(--muted); z-index:2; }
+  th[aria-sort=ascending]::after { content:" ▲"; } th[aria-sort=descending]::after { content:" ▼"; }
+  tbody tr:hover td { background:var(--surface); }
+  .num { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .inline-bar { display:inline-block; height:6px; background:var(--accent); border-radius:3px;
+    opacity:.55; margin-left:.5rem; vertical-align:middle; }
+  .name-btn { border:0; background:none; color:var(--accent); font:inherit; cursor:pointer;
+    padding:0; text-align:left; }
+  .name-btn:hover { text-decoration:underline; }
+  .note { border:1px solid var(--border); border-left:4px solid var(--accent); padding:.7rem 1rem;
+    border-radius:8px; background:var(--card); font-size:.85rem; color:var(--muted); margin:1.25rem 0 1rem; }
+
+  /* Author panel */
+  .backdrop { position:fixed; inset:0; background:rgb(0 0 0/.35); opacity:0;
+    pointer-events:none; transition:opacity .2s; z-index:20; }
+  .backdrop.open { opacity:1; pointer-events:auto; }
+  .panel { position:fixed; top:0; right:0; width:min(500px,100vw); height:100vh;
+    background:var(--card); border-left:1px solid var(--border); box-shadow:var(--shadow-lg);
+    transform:translateX(100%); transition:transform .22s ease; z-index:21;
+    display:flex; flex-direction:column; }
+  .panel.open { transform:none; }
+  .panel-h { display:flex; align-items:flex-start; gap:1rem; padding:1.1rem 1.25rem;
+    border-bottom:1px solid var(--border); }
+  .panel-h h3 { margin:0; font-size:1.15rem; }
+  .panel-h .muted { margin:.2rem 0 0; }
+  .x { border:0; background:none; font-size:1.25rem; cursor:pointer; color:var(--muted);
+    line-height:1; padding:.2rem; }
+  .x:hover { color:var(--fg); }
+  .panel-b { overflow-y:auto; padding:.5rem 1.25rem 2rem; }
+  .panel-b h4 { font-size:.75rem; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--muted); margin:1.25rem 0 .5rem; }
+  .pub { padding:.5rem 0; border-bottom:1px solid var(--border); font-size:.9rem; }
+  .pub a { color:var(--fg); text-decoration:none; font-weight:500; }
+  .pub a:hover { color:var(--accent); text-decoration:underline; }
+  .badge { font-size:.65rem; background:var(--accent-soft); color:var(--accent);
+    border-radius:4px; padding:.1rem .35rem; margin-left:.4rem; vertical-align:middle;
+    font-weight:600; white-space:nowrap; }
+  .badge.award { background:color-mix(in srgb, var(--c2) 18%, transparent); color:var(--c2); }
+  .badge.warn { background:color-mix(in srgb, var(--neg) 15%, transparent); color:var(--neg); }
+  .who { display:block; color:var(--muted); font-size:.75rem; }
+  #p-id a { color:var(--accent); }
+  .pub .co { display:block; color:var(--muted); font-size:.78rem; margin-top:.1rem; }
+
+  .error { border:1px solid var(--border); border-left:4px solid var(--neg);
+    padding:1rem 1.25rem; border-radius:8px; background:var(--card); margin-top:1rem; }
+
+  @media (max-width:800px) {
+    .layout { grid-template-columns:1fr; }
+    aside.nav { position:static; height:auto; }
+    main { padding:0 1rem 2rem; }
+    .grid2 { grid-template-columns:1fr; }
+    th { position:static; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+  <aside class="nav">
+    <div class="brand"><span class="logo">ACL</span>
+      <div>ACL Anthology<small>author &amp; institution statistics</small></div></div>
+    <div id="nav"></div>
+  </aside>
+  <main>
+    <header class="main-h" id="hdr">
+      <div class="eyebrow" id="eyebrow"></div>
+      <h1 id="title">Author Statistics</h1>
+      <div class="muted" id="src"></div>
+      <div class="scopes" id="scopes" role="group" aria-label="Scope"></div>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="overview">Overview</button>
+        <button class="tab" data-tab="authors">Authors</button>
+        <button class="tab" data-tab="inst">Institutions</button>
+        <button class="tab" data-tab="collab">Collaboration</button>
+        <button class="tab" data-tab="topics">Topics</button>
+        <button class="tab" data-tab="trends">Trends</button>
+      </div>
+    </header>
+
+    <section id="view-overview">
+      <div class="cards" id="cards"></div>
+      <div class="grid2">
+        <div class="panel-box">
+          <h2>Team size</h2>
+          <p class="sub">Papers by number of authors. Dashed line marks the median.</p>
+          <div id="team-chart"></div>
+        </div>
+        <div class="panel-box">
+          <h2>Papers per author</h2>
+          <p class="sub">Authors by paper count in this volume (log scale).</p>
+          <div id="ppa-chart"></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="panel-box">
+          <h2 id="tracks-h">Tracks</h2>
+          <p class="sub" id="tracks-sub">Share of papers per sub-volume.</p>
+          <div id="tracks"></div>
+        </div>
+        <div class="panel-box">
+          <h2>Community structure</h2>
+          <p class="sub">How concentrated and connected the author population is.</p>
+          <div id="meters"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-authors" hidden>
+      <div class="controls" style="margin-top:1.25rem">
+        <input type="search" id="q" placeholder="Filter by name…">
+        <label>min papers <input type="number" id="min" value="1" min="1" style="width:5rem"></label>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th data-k="rank">#</th>
+          <th data-k="name">Name</th>
+          <th class="num" data-k="papers">Papers</th>
+          <th class="num" data-k="first">1st-author</th>
+          <th class="num" data-k="ncoauth">Co-authors</th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+    </section>
+
+    <section id="view-inst" hidden>
+      <div class="note" id="inst-note"></div>
+      <div class="panel-box" id="inst-chart-box">
+        <h2>Top institutions</h2>
+        <p class="sub">Papers with ≥1 author from the institution; tick marks first-authored papers.</p>
+        <div id="inst-chart"></div>
+      </div>
+      <div class="panel-box" id="country-box">
+        <h2>Countries</h2>
+        <p class="sub" id="country-sub"></p>
+        <div id="countries"></div>
+      </div>
+      <div class="controls">
+        <input type="search" id="iq" placeholder="Filter by institution…">
+        <label>min papers <input type="number" id="imin" value="1" min="1" style="width:5rem"></label>
+        <span class="count" id="icount"></span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr>
+          <th data-ik="rank">#</th>
+          <th data-ik="name">Institution</th>
+          <th data-ik="country">Country</th>
+          <th class="num" data-ik="papers">Papers</th>
+          <th class="num" data-ik="share">% of papers</th>
+          <th class="num" data-ik="first">1st-author</th>
+          <th class="num" data-ik="lead">Lead %</th>
+          <th class="num" data-ik="last">Last-author</th>
+          <th class="num" data-ik="solo">Single-inst.</th>
+          <th data-ik="partner">Top partner</th>
+          <th class="num" data-ik="conc" title="Share of joint-paper links that go to its 3 most frequent partners">Top-3 partner share</th>
+          <th class="num" data-ik="awards">Awards</th>
+          <th class="num" data-ik="authors">Authors</th>
+        </tr></thead>
+        <tbody id="irows"></tbody>
+      </table></div>
+    </section>
+
+    <section id="view-collab" hidden>
+      <div class="note" id="collab-note"></div>
+      <div class="panel-box" id="pairs-box">
+        <h2>Institution pairs</h2>
+        <p class="sub" id="pairs-sub"></p>
+        <div id="pairs"></div>
+      </div>
+      <div class="panel-box" id="net-box">
+        <h2>Institution network</h2>
+        <p class="sub" id="net-sub"></p>
+        <div class="controls">
+          <label>institutions <select id="net-n"><option>30</option><option selected>50</option><option>80</option></select></label>
+          <label>min shared papers <input type="number" id="net-min" value="2" min="1" style="width:5rem"></label>
+        </div>
+        <div class="legend" id="net-legend"></div>
+        <div id="net"></div>
+      </div>
+      <div class="panel-box" id="cpairs-box">
+        <h2>Country pairs</h2>
+        <p class="sub" id="cpairs-sub"></p>
+        <div id="cpairs"></div>
+      </div>
+      <div class="panel-box" id="pt-box">
+        <h2>Institution pair trends</h2>
+        <p class="sub" id="pt-sub"></p>
+        <div class="controls">
+          <input type="search" id="pt-q" placeholder="Show pairs involving…">
+          <label>show <select id="pt-n"><option>5</option><option selected>8</option><option>12</option></select></label>
+        </div>
+        <div class="legend" id="pt-legend"></div>
+        <div id="pt-chart"></div>
+      </div>
+      <div class="grid2">
+        <div class="panel-box">
+          <h2>Author pairs</h2>
+          <p class="sub">Two people who co-authored the most papers in this volume.</p>
+          <div id="apairs"></div>
+        </div>
+        <div class="panel-box">
+          <h2>Author trios</h2>
+          <p class="sub">Three people who co-authored the most papers in this volume.</p>
+          <div id="atrios"></div>
+        </div>
+      </div>
+      <div class="grid2" id="awards-box">
+        <div class="panel-box">
+          <h2>Awards by institution</h2>
+          <p class="sub" id="aw-inst-sub"></p>
+          <div id="aw-inst"></div>
+        </div>
+        <div class="panel-box">
+          <h2>Awarded collaborations</h2>
+          <p class="sub">Institution pairs on award-winning papers; value = awarded / joint papers.</p>
+          <div id="aw-pairs"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-topics" hidden>
+      <div class="note">Topic shares are keyword matches over titles and abstracts (a paper can match
+        several topics). Tick marks show the previous edition of the same conference.</div>
+      <div class="grid2">
+        <div class="panel-box">
+          <h2>Research topics</h2>
+          <p class="sub" id="topics-sub"></p>
+          <div id="topics"></div>
+        </div>
+        <div class="panel-box">
+          <h2>Frequent title terms</h2>
+          <p class="sub">Number of paper titles containing the term (stopwords removed).</p>
+          <div class="terms" id="terms"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-trends" hidden>
+      <div class="controls" style="margin-top:1.25rem">
+        <label>Metric <select id="trend-metric"></select></label>
+        <label>Conference (heatmap &amp; institutions) <select id="trend-conf"></select></label>
+      </div>
+      <div class="panel-box">
+        <h2 id="trend-title"></h2>
+        <p class="sub" id="trend-sub"></p>
+        <div class="legend" id="trend-legend"></div>
+        <div id="trend-chart"></div>
+      </div>
+      <div class="panel-box">
+        <h2>Topic share by year</h2>
+        <p class="sub">Share of papers matching each topic lexicon.</p>
+        <div style="overflow-x:auto"><table class="heat" id="heat"></table></div>
+      </div>
+      <div class="panel-box">
+        <h2>Institution trends</h2>
+        <p class="sub" id="it-sub"></p>
+        <div class="controls">
+          <input type="search" id="it-q" placeholder="Show institutions matching…">
+          <label>show <select id="it-n"><option>5</option><option selected>8</option><option>12</option></select></label>
+          <label><input type="checkbox" id="it-share" checked> as share of papers</label>
+        </div>
+        <div class="legend" id="it-legend"></div>
+        <div id="it-chart"></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="tip"></div>
+<div class="backdrop" id="backdrop"></div>
+<aside class="panel" id="panel" role="dialog" aria-label="Author detail">
+  <div class="panel-h">
+    <div style="flex:1">
+      <h3 id="p-name"></h3>
+      <p class="muted" id="p-stats"></p>
+      <p class="muted" id="p-affs"></p>
+      <p class="muted" id="p-id"></p>
+    </div>
+    <button class="x" id="p-close" aria-label="Close">✕</button>
+  </div>
+  <div class="panel-b" id="p-author">
+    <h4>Across tracked venues</h4>
+    <div id="p-history"></div>
+    <h4>Publications in this volume</h4>
+    <div id="p-pubs"></div>
+    <h4>Top collaborators</h4>
+    <div id="p-collab"></div>
+  </div>
+  <div class="panel-b" id="p-inst" hidden>
+    <h4>Partner institutions</h4>
+    <p class="muted">Papers shared with each institution; tick = of those, papers this institution first-authored.</p>
+    <div id="pi-partners"></div>
+    <h4>Who leads when it is not first author</h4>
+    <p class="muted" id="pi-ledby-sub"></p>
+    <div id="pi-ledby"></div>
+    <h4>Last-author institution</h4>
+    <p class="muted" id="pi-last-sub"></p>
+    <div id="pi-last"></div>
+    <h4>Track mix</h4>
+    <p class="muted">Share of its papers per track; tick = share across the whole volume.</p>
+    <div id="pi-tracks"></div>
+    <h4>Topic profile</h4>
+    <p class="muted">Share of its papers matching each topic; tick = share across the whole volume.</p>
+    <div id="pi-topics"></div>
+    <h4>Papers in this volume</h4>
+    <div id="pi-pubs"></div>
+  </div>
+</aside>
+
+<script>
+let INDEX = [], DATA = null, currentId = null, activeTab = 'overview';
+let authorsView = [], sortKey = null, sortDir = 1, lastFocus = null;
+let instView = [], isortKey = null, isortDir = 1;
+let PAIRS = [], INST_MULTI = 0, INST_WITH = 0;  // institution pairs of the current dataset
+let INST_STATS = null;  // instCollab() result for the current dataset (coverage counts)
+let AUTHORS = new Map();  // person key (Anthology ID or name slug) -> author record
+let INST_TRENDS = null;   // data/inst_trends.json, loaded on first Trends view
+const PEOPLE_SHARDS = new Map();  // shard letter -> Promise<{key: person history}>
+
+/* Disambiguating line for a person whose name is shared with other records. */
+const whoLine = a => a.affiliations[0] || (a.id ? `ID ${a.id}` : 'no Anthology ID');
+
+const REGION = new Intl.DisplayNames(['en'], { type: 'region' });
+const countryName = cc => { try { return REGION.of(cc); } catch { return cc; } };
+const countryLabel = cc => cc ? countryName(cc) : '—';
+// Volumes where under 30% of author slots have a known affiliation/country give
+// unrepresentative shares; trend charts leave those years out.
+const MIN_COVERAGE = 0.3;
+
+const $ = id => document.getElementById(id);
+const SVGNS = 'http://www.w3.org/2000/svg';
+const fmt = n => n.toLocaleString('en-US');
+const pct = (x, d = 1) => x == null ? '—' : `${(x * 100).toFixed(d)}%`;
+const CONF_COLORS = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
+const confColor = conf => {
+  const confs = [...new Set(INDEX.map(e => e.conference))];
+  return `var(${CONF_COLORS[confs.indexOf(conf) % CONF_COLORS.length]})`;
+};
+const SCOPE_LABELS = { main: 'Main conference', findings: 'Findings', workshops: 'Workshops',
+  all: 'Whole event' };
+const byScope = scope => INDEX.filter(e => (e.scope || 'main') === scope);
+const scopeOf = () => (DATA && DATA.scope) || 'main';
+const TRACK_LABELS = { long: 'Long', main: 'Main', short: 'Short', findings: 'Findings',
+  demo: 'Demos', demos: 'Demos', srw: 'Student RW', industry: 'Industry',
+  tutorials: 'Tutorials', tutorial: 'Tutorials' };
+
+function el(tag, attrs = {}, ...kids) {
+  const ns = ['svg', 'g', 'rect', 'line', 'path', 'text', 'circle', 'title'].includes(tag);
+  const e = ns ? document.createElementNS(SVGNS, tag) : document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.setAttribute('class', v);
+    else if (k === 'text') e.textContent = v;
+    else if (k === 'style' && typeof v === 'object') {
+      for (const [p, val] of Object.entries(v)) {
+        if (p.startsWith('--')) e.style.setProperty(p, val); else e.style[p] = val;
+      }
+    }
+    else e.setAttribute(k, v);
+  }
+  e.append(...kids);
+  return e;
+}
+
+/* Tooltip */
+const tip = $('tip');
+function attachTip(node, text) {
+  node.addEventListener('mousemove', ev => {
+    tip.textContent = text;
+    tip.style.opacity = 1;
+    const w = tip.offsetWidth;
+    tip.style.left = `${Math.min(ev.clientX + 12, innerWidth - w - 8)}px`;
+    tip.style.top = `${ev.clientY - 34}px`;
+  });
+  node.addEventListener('mouseleave', () => { tip.style.opacity = 0; });
+}
+
+function niceTicks(max, n = 4) {
+  if (max <= 0) return [0];
+  const raw = max / n, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const out = [];
+  for (let v = 0; v <= max + 1e-9; v += step) out.push(+v.toFixed(10));
+  if (out[out.length - 1] < max) out.push(out[out.length - 1] + step);
+  return out;
+}
+
+/* Vertical bar chart with axes. opts: {log, marker, tipFmt} */
+function columnChart(host, entries, opts = {}) {
+  host.textContent = '';
+  const W = 560, H = 210, L = 40, R = 8, T = 10, B = 26;
+  const iw = W - L - R, ih = H - T - B;
+  const maxV = Math.max(...entries.map(([, v]) => v), 1);
+  const svg = el('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img' });
+  let y, ticks;
+  if (opts.log) {
+    const top = 10 ** Math.ceil(Math.log10(maxV));
+    ticks = []; for (let t = 1; t <= top; t *= 10) ticks.push(t);
+    y = v => T + ih - (v <= 0 ? 0 : (Math.log10(v) + 0.3) / (Math.log10(top) + 0.3) * ih);
+  } else {
+    ticks = niceTicks(maxV);
+    const top = ticks[ticks.length - 1];
+    y = v => T + ih - v / top * ih;
+  }
+  for (const t of ticks) {
+    svg.append(el('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }),
+      el('text', { x: L - 6, y: y(t) + 4, 'text-anchor': 'end', text: fmt(t) }));
+  }
+  const bw = iw / entries.length, gap = Math.min(4, bw * 0.2);
+  const labelEvery = Math.ceil(entries.length / 24);
+  entries.forEach(([label, v], i) => {
+    const x = L + i * bw + gap / 2;
+    const r = el('rect', { class: 'bar', x, y: y(v), width: Math.max(bw - gap, 1),
+      height: Math.max(T + ih - y(v), v > 0 ? 1 : 0), rx: 2 });
+    attachTip(r, opts.tipFmt ? opts.tipFmt(label, v) : `${label}: ${fmt(v)}`);
+    svg.append(r);
+    if (i % labelEvery === 0) svg.append(el('text',
+      { x: x + (bw - gap) / 2, y: H - 8, 'text-anchor': 'middle', text: label }));
+  });
+  if (opts.marker != null) {
+    const i = entries.findIndex(([l]) => +l >= opts.marker);
+    if (i >= 0) {
+      const frac = opts.marker - +entries[i][0];
+      const x = L + (i + 0.5 + frac) * bw;
+      svg.append(el('line', { x1: x, x2: x, y1: T, y2: T + ih, stroke: 'currentColor',
+        'stroke-dasharray': '4 3', opacity: .6 }),
+        el('text', { x: x + 4, y: T - 2, text: `median ${opts.marker}` }));
+    }
+  }
+  host.append(svg);
+}
+
+/* Multi-series line chart: series = [{name, color, points:[[x,y],...]}] */
+function lineChart(host, series, { yFmt = fmt, pctAxis = false } = {}) {
+  host.textContent = '';
+  const W = 900, H = 300, L = 54, R = 16, T = 12, B = 28;
+  const iw = W - L - R, ih = H - T - B;
+  const xs = [...new Set(series.flatMap(s => s.points.map(p => p[0])))].sort((a, b) => a - b);
+  const maxV = Math.max(...series.flatMap(s => s.points.map(p => p[1])), pctAxis ? 0.01 : 1);
+  const ticks = niceTicks(maxV);
+  const top = ticks[ticks.length - 1];
+  const x = v => L + (xs.length === 1 ? iw / 2 : (xs.indexOf(v) / (xs.length - 1)) * iw);
+  const y = v => T + ih - v / top * ih;
+  const svg = el('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img' });
+  for (const t of ticks) svg.append(
+    el('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }),
+    el('text', { x: L - 8, y: y(t) + 4, 'text-anchor': 'end', text: yFmt(t) }));
+  for (const v of xs) svg.append(el('text', { x: x(v), y: H - 8, 'text-anchor': 'middle', text: v }));
+  for (const s of series) {
+    const pts = s.points.filter(p => p[1] != null);
+    if (!pts.length) continue;
+    svg.append(el('path', { class: 'line', stroke: s.color,
+      d: pts.map((p, i) => `${i ? 'L' : 'M'}${x(p[0])},${y(p[1])}`).join('') }));
+    for (const p of pts) {
+      const c = el('circle', { class: 'pt', cx: x(p[0]), cy: y(p[1]), r: 4.5, fill: s.color,
+        stroke: 'var(--card)', 'stroke-width': 2 });
+      attachTip(c, `${s.name} ${p[0]}: ${yFmt(p[1])}`);
+      svg.append(c);
+    }
+  }
+  host.append(svg);
+}
+
+/* HTML horizontal bars: rows = [{label, value, ghost?, text}] */
+function hbars(host, rows, max) {
+  host.textContent = '';
+  host.className = 'hbars';
+  max = max || Math.max(...rows.map(r => Math.max(r.value, r.ghost || 0)), 1e-9);
+  for (const r of rows) {
+    const track = el('div', { class: 'track' },
+      el('div', { class: 'fill', style: { width: `${r.value / max * 100}%` } }));
+    if (r.ghost != null) track.append(el('div', { class: 'ghost',
+      style: { left: `calc(${r.ghost / max * 100}% - 1px)` } }));
+    if (r.tip) attachTip(track, r.tip);
+    host.append(el('div', { class: 'lab', title: r.label, text: r.label }), track,
+      el('div', { class: 'val', text: r.text }));
+  }
+}
+
+/* Same-conference previous edition (for deltas) */
+function prevEdition(d) {
+  return byScope(d.scope || 'main').filter(e => e.conference === d.conference && e.year < d.year)
+    .sort((a, b) => b.year - a.year)[0] || null;
+}
+
+async function loadJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return r.json();
+}
+
+function showFatal(msg) {
+  $('title').textContent = 'No data';
+  const c1 = el('code', { text: 'data/index.json' }), c2 = el('code', { text: 'python stats.py' });
+  document.querySelector('main').append(el('p', { class: 'error' }, msg[0], c1, msg[1], c2, msg[2]));
+}
+
+async function init() {
+  try {
+    INDEX = await loadJSON('data/index.json');
+  } catch (e) {
+    showFatal(['Could not load ', ' — run ', ' first.']);
+    return;
+  }
+  if (!INDEX.length) {
+    showFatal(['No volumes in ', ' — run ', ' to build at least one volume.']);
+    return;
+  }
+  buildNav();
+  buildTrendControls();
+  const id = INDEX.some(e => e.id === location.hash.slice(1)) ? location.hash.slice(1) : INDEX[0].id;
+  await selectVolume(id, false);
+}
+
+function buildNav() {
+  const nav = $('nav');
+  nav.textContent = '';
+  const groups = new Map();
+  for (const e of byScope(scopeOf())) {
+    if (!groups.has(e.conference)) groups.set(e.conference, []);
+    groups.get(e.conference).push(e);
+  }
+  for (const [conf, vols] of groups) {
+    const g = el('div', { class: 'nav-group' }, el('div', { class: 'nav-conf', text: conf }));
+    for (const e of [...vols].sort((a, b) => b.year - a.year)) {
+      const b = el('button', { class: 'nav-vol', 'data-id': e.id },
+        el('span', { text: e.year }), el('span', { class: 'n', text: fmt(e.papers) }));
+      b.classList.toggle('active', e.id === currentId);
+      b.addEventListener('click', () => { location.hash = e.id; });
+      g.append(b);
+    }
+    nav.append(g);
+  }
+}
+
+function buildScopes() {
+  const host = $('scopes');
+  host.textContent = '';
+  const event = DATA.event || DATA.id;
+  for (const [scope, label] of Object.entries(SCOPE_LABELS)) {
+    const e = INDEX.find(x => (x.event || x.id) === event && (x.scope || 'main') === scope);
+    const b = el('button', { class: 'scope', title: e ? '' : `No ${label.toLowerCase()} for this event` },
+      label, el('span', { class: 'n', text: e ? fmt(e.papers) : '—' }));
+    b.disabled = !e;
+    b.classList.toggle('active', scope === scopeOf());
+    if (e) b.addEventListener('click', () => { location.hash = e.id; });
+    host.append(b);
+  }
+}
+
+async function selectVolume(id, push = true) {
+  document.querySelectorAll('main .error').forEach(e => e.remove());
+  try {
+    DATA = await loadJSON(`data/${id}.json`);
+  } catch (e) {
+    document.querySelectorAll('.nav-vol').forEach(b =>
+      b.classList.toggle('active', b.dataset.id === currentId));
+    if (currentId && location.hash !== '#' + currentId) location.hash = currentId;
+    $('src').textContent = '';
+    $('eyebrow').textContent = '';
+    $('title').textContent = id;
+    for (const k of ['rows', 'cards', 'team-chart', 'ppa-chart', 'tracks', 'meters', 'count',
+                     'irows', 'icount', 'inst-chart', 'topics', 'terms']) $(k).textContent = '';
+    $(`view-${activeTab}`).append(el('p', { class: 'error' }, 'Could not load ',
+      el('code', { text: `data/${id}.json` }), '.'));
+    return;
+  }
+  currentId = id;
+  if (push && location.hash !== '#' + id) location.hash = id;
+  buildNav();
+  buildScopes();
+  closePanel();
+  $('eyebrow').textContent = `${DATA.conference} ${DATA.year} · ${SCOPE_LABELS[scopeOf()]}`;
+  $('title').textContent = DATA.title;
+  $('src').textContent = `Source: ACL Anthology XML (${DATA.id})`;
+  AUTHORS = new Map(DATA.authors.map(a => [a.key, a]));
+  authorsView = DATA.authors.map((a, i) => ({
+    rank: i + 1, name: a.name, papers: a.papers.length, first: a.first_author.length,
+    ncoauth: Object.keys(a.coauthors).length, raw: a,
+    search: `${a.name} ${a.affiliations.join(' ')} ${a.id || ''}`.toLowerCase(),
+  }));
+  const n = DATA.stats.papers;
+  const collab = instCollab(DATA);
+  PAIRS = collab.pairs;
+  instView = (DATA.institutions || []).map((x, i) => {
+    const c = collab.insts[i], top = topEntries(c.partners, 1)[0];
+    return {
+      rank: i + 1, idx: i, name: x.name, country: x.country ? countryName(x.country) : '',
+      cc: x.country, papers: x.papers, share: x.papers / n,
+      first: x.first_author_papers ?? 0, authors: x.authors,
+      lead: x.papers ? (x.first_author_papers ?? 0) / x.papers : 0,
+      solo: x.papers ? c.solo / x.papers : 0,
+      partner: top ? DATA.institutions[top[0]].name : '', partnerN: top ? top[1] : 0, collab: c,
+      last: c.lastAuthored, awards: c.awards,
+      conc: c.links ? topEntries(c.partners, 3).reduce((s, [, v]) => s + v, 0) / c.links : 0,
+    };
+  });
+  INST_MULTI = collab.multi; INST_WITH = collab.withInst; INST_STATS = collab;
+  renderOverview();
+  render();
+  renderInst();
+  renderCollab();
+  renderTopics();
+  if (activeTab === 'trends') renderTrends();
+}
+
+/* Overview */
+function renderOverview() {
+  const s = DATA.stats, prev = prevEdition(DATA);
+  const me = INDEX.find(e => e.id === DATA.id) || {};
+  const cards = $('cards');
+  cards.textContent = '';
+  const items = [
+    ['Papers', s.papers, prev && prev.papers, fmt],
+    ['Unique authors', s.unique_authors, prev && prev.unique_authors, fmt],
+    ['Avg authors / paper', s.avg_authors_per_paper, prev && prev.avg_authors_per_paper, v => v.toFixed(2)],
+    ['Single-author papers', s.single_author_papers, null, fmt],
+    ['Newcomer authors', me.newcomer_share, prev && prev.newcomer_share, v => pct(v, 0)],
+    ['Award papers', s.award_papers, null, fmt],
+  ];
+  for (const [label, v, pv, f] of items) {
+    if (v == null) continue;
+    const card = el('div', { class: 'card' }, el('span', { class: 'label', text: label }),
+      el('b', { text: f(v) }));
+    if (pv != null && pv !== 0) {
+      const ch = (v - pv) / pv;
+      const cls = Math.abs(ch) < 0.005 ? 'flat' : ch > 0 ? 'up' : 'down';
+      card.append(el('span', { class: `delta ${cls}`,
+        text: `${ch > 0 ? '▲' : ch < 0 ? '▼' : '•'} ${pct(Math.abs(ch), 0)} vs ${prev.year}` }));
+    }
+    if (label === 'Newcomer authors') card.title =
+      'Authors not seen in any tracked volume from an earlier year';
+    cards.append(card);
+  }
+
+  const team = Object.entries(s.authors_per_paper_dist);
+  const maxSize = +team[team.length - 1][0];
+  // Dense x axis up to 20; lump the tail so outliers don't flatten the chart.
+  const dense = [];
+  let tail = 0;
+  for (let k = 1; k <= Math.min(maxSize, 20); k++) dense.push([String(k), s.authors_per_paper_dist[k] || 0]);
+  for (const [k, v] of team) if (+k > 20) tail += v;
+  if (tail) dense.push(['21+', tail]);
+  columnChart($('team-chart'), dense, {
+    marker: s.median_authors_per_paper,
+    tipFmt: (l, v) => `${l} author${l === '1' ? '' : 's'}: ${fmt(v)} papers (${pct(v / s.papers)})`,
+  });
+
+  const ppa = Object.entries(s.papers_per_author_dist);
+  columnChart($('ppa-chart'), ppa, {
+    log: true,
+    tipFmt: (l, v) => `${fmt(v)} author${v === 1 ? '' : 's'} with ${l} paper${l === '1' ? '' : 's'}`,
+  });
+
+  const tracks = $('tracks');
+  tracks.textContent = '';
+  tracks.className = '';
+  const td = Object.entries(s.track_dist || {});
+  const many = td.length > 8;
+  $('tracks-h').textContent = scopeOf() === 'workshops' ? 'Workshops'
+    : scopeOf() === 'all' ? 'Tracks & workshops' : 'Tracks';
+  $('tracks-sub').textContent = many ? 'Papers per sub-volume.' : 'Share of papers per sub-volume.';
+  if (many) {
+    hbars(tracks, td.map(([k, v]) => ({ label: TRACK_LABELS[k] || k, value: v,
+      text: `${fmt(v)} · ${pct(v / s.papers, 0)}` })));
+  } else {
+    const stack = el('div', { class: 'stack' });
+    td.forEach(([k, v], i) => {
+      const seg = el('div', { style: { flex: v, background: `var(${CONF_COLORS[i % 6]})` } });
+      attachTip(seg, `${TRACK_LABELS[k] || k}: ${fmt(v)} (${pct(v / s.papers)})`);
+      stack.append(seg);
+    });
+    tracks.append(stack, el('div', { class: 'legend' }, ...td.map(([k, v], i) =>
+      el('span', { style: { '--sw': `var(${CONF_COLORS[i % 6]})` },
+        text: `${TRACK_LABELS[k] || k} ${pct(v / s.papers, 0)}` }))));
+  }
+
+  const meters = $('meters');
+  meters.textContent = '';
+  for (const [label, v, note] of [
+    ['Authors with a single paper', s.one_paper_author_share,
+      'Long tail: most authors appear once per venue.'],
+    ['Slots held by top 1% of authors', s.top1pct_author_slot_share,
+      'Concentration of output among the most prolific authors.'],
+    ['Largest co-authorship component', s.largest_component_share,
+      `${fmt(s.collab_components)} connected groups; share of authors in the biggest one.`],
+    ['Author slots with an affiliation', s.affiliation_coverage,
+      'Coverage of self-reported institution data.'],
+    ['Papers with authors from 2+ countries', s.international_share,
+      'Among papers where at least one author\'s country is known.'],
+    ['Author slots with an explicit Anthology person ID', s.anthology_id_coverage,
+      'Other mentions are resolved through the Anthology people registry by name; ' +
+      `${fmt(s.shared_name_records || 0)} records here share a name with another record.`],
+  ]) {
+    if (v == null) continue;
+    meters.append(el('div', { class: 'meter' },
+      el('div', { class: 'top' }, el('span', { text: label }), el('b', { text: pct(v) })),
+      el('div', { class: 'track' }, el('div', { class: 'fill', style: { width: pct(v) } })),
+      el('div', { class: 'hint', text: note })));
+  }
+}
+
+/* Sorting helpers */
+function sortRows(rows, key, dir) {
+  if (!key) return rows;
+  return [...rows].sort((a, b) => (typeof a[key] === 'string'
+    ? a[key].localeCompare(b[key]) : a[key] - b[key]) * dir);
+}
+function markSort(attr, key, dir) {
+  document.querySelectorAll(`th[${attr}]`).forEach(th => th.setAttribute('aria-sort',
+    th.getAttribute(attr) === key ? (dir > 0 ? 'ascending' : 'descending') : 'none'));
+}
+function emptyRow(tbody, cols, text) {
+  tbody.append(el('tr', {}, el('td', { colspan: cols, class: 'muted', text })));
+}
+
+/* Authors */
+function render() {
+  const q = $('q').value.trim().toLowerCase();
+  const min = +$('min').value || 1;
+  const rows = sortRows(authorsView.filter(a => a.papers >= min && a.search.includes(q)),
+    sortKey, sortDir);
+  markSort('data-k', sortKey, sortDir);
+  $('count').textContent = `${fmt(rows.length)} authors`;
+  const tbody = $('rows');
+  tbody.textContent = '';
+  if (!rows.length) return emptyRow(tbody, 5, 'No authors match.');
+  const maxP = authorsView[0] ? authorsView[0].papers : 1;
+  for (const a of rows.slice(0, 2000)) {
+    const btn = el('button', { class: 'name-btn', text: a.name });
+    btn.addEventListener('click', () => openPanel(a.raw, btn));
+    const cell = el('td', {}, btn);
+    const r = a.raw;
+    if (r.ambiguous) {
+      cell.append(el('span', { class: 'badge warn', text: 'may merge people',
+        title: 'Several registered Anthology people share this name and these mentions carry ' +
+          'no person ID, so these papers may belong to several people.' }));
+    } else if (r.namesakes > 0) {
+      cell.append(el('span', { class: 'badge', title: `Anthology person ID: ${r.id}`, text: 'ID' }));
+    }
+    const affs = r.affiliations;
+    cell.append(el('span', { class: 'who', title: affs.join(' · '),
+      text: affs.length
+        ? affs.slice(0, 2).join(' · ') + (affs.length > 2 ? ` +${affs.length - 2} more` : '')
+        : r.namesakes > 0 ? whoLine(r) : 'no affiliation reported' }));
+    tbody.append(el('tr', {},
+      el('td', { text: a.rank }), cell,
+      el('td', { class: 'num' }, String(a.papers),
+        el('span', { class: 'inline-bar', style: { width: `${a.papers / maxP * 60}px` } })),
+      el('td', { class: 'num', text: a.first }),
+      el('td', { class: 'num', text: a.ncoauth })));
+  }
+}
+
+/* Author detail panel */
+function openPanel(a, trigger) {
+  lastFocus = trigger || null;
+  $('p-author').hidden = false;
+  $('p-inst').hidden = true;
+  $('panel').setAttribute('aria-label', 'Author detail');
+  $('p-name').textContent = a.name;
+  $('p-stats').textContent = `${a.papers.length} papers · ${a.first_author.length} first-authored · ` +
+    `${Object.keys(a.coauthors).length} co-authors`;
+  $('p-affs').textContent = (a.affiliations && a.affiliations.length) ? a.affiliations.join(' · ') : '';
+  const pid = $('p-id');
+  pid.textContent = '';
+  if (a.id) {
+    pid.append('Anthology profile ', el('a', { href: `https://aclanthology.org/people/${a.id}/`,
+      target: '_blank', rel: 'noopener', text: a.id }));
+  } else {
+    pid.textContent = `No Anthology person ID: these papers may belong to several people named ${a.name}.`;
+  }
+  renderHistory(a);
+  const pubs = $('p-pubs');
+  pubs.textContent = '';
+  const firstSet = new Set(a.first_author);
+  for (const i of a.papers) {
+    const p = DATA.papers[i];
+    const div = el('div', { class: 'pub' },
+      el('a', { href: p.url, target: '_blank', rel: 'noopener', text: p.title }));
+    if (p.track) div.append(el('span', { class: 'badge', text: TRACK_LABELS[p.track] || p.track }));
+    if (firstSet.has(i)) div.append(el('span', { class: 'badge', text: '1st author' }));
+    for (const aw of p.award || []) div.append(el('span', { class: 'badge award', text: `🏆 ${aw}` }));
+    const others = p.authors.filter(k => k !== a.key).map(k => AUTHORS.get(k)?.name ?? k);
+    if (others.length) div.append(el('span', { class: 'co', text: 'with ' + others.join(', ') }));
+    pubs.append(div);
+  }
+  const collab = $('p-collab');
+  const entries = Object.entries(a.coauthors).sort((x, y) => y[1] - x[1]).slice(0, 15);
+  if (!entries.length) { collab.className = 'muted'; collab.textContent = 'No co-authors.'; }
+  else hbars(collab, entries.map(([key, n]) => {
+    const c = AUTHORS.get(key);
+    const label = c && c.namesakes > 0 ? `${c.name} (${whoLine(c)})` : (c?.name ?? key);
+    return { label, value: n, text: `${n} paper${n > 1 ? 's' : ''}` };
+  }));
+  $('panel').classList.add('open');
+  $('backdrop').classList.add('open');
+  $('p-close').focus();
+}
+
+function closePanel() {
+  $('panel').classList.remove('open');
+  $('backdrop').classList.remove('open');
+  if (lastFocus) { lastFocus.focus(); lastFocus = null; }
+}
+
+/* Cross-venue history of one person (data/people/<shard>.json) */
+function personShard(key) {
+  const c = key[0].toLowerCase();
+  const s = c >= 'a' && c <= 'z' ? c : '_';
+  if (!PEOPLE_SHARDS.has(s)) PEOPLE_SHARDS.set(s, loadJSON(`data/people/${s}.json`));
+  return PEOPLE_SHARDS.get(s);
+}
+
+async function renderHistory(a) {
+  const host = $('p-history');
+  host.replaceChildren(el('span', { class: 'muted', text: 'Loading…' }));
+  let p;
+  try {
+    p = (await personShard(a.key))[a.key];
+  } catch (e) {
+    host.replaceChildren(el('span', { class: 'muted', text: 'History unavailable — run python stats.py.' }));
+    return;
+  }
+  if (!$('panel').classList.contains('open') || $('p-name').textContent !== a.name) return;
+  if (!p) { host.replaceChildren(el('span', { class: 'muted', text: 'No history.' })); return; }
+  const V = p.venues.map(([event, year, conf, scope, n, first, last]) =>
+    ({ event, year, conf, scope, n, first, last }));
+  const total = V.reduce((t, v) => t + v.n, 0);
+  const first = V.reduce((t, v) => t + v.first, 0), last = V.reduce((t, v) => t + v.last, 0);
+  const years = [...new Set(V.map(v => v.year))].sort();
+  const perYear = new Map();
+  for (const v of V) perYear.set(v.year, (perYear.get(v.year) || 0) + v.n);
+  host.textContent = '';
+  host.append(el('p', { class: 'muted', style: { margin: '0 0 .4rem' },
+    text: `${total} papers across ${new Set(V.map(v => v.event)).size} events, ` +
+      `${years[0]}–${years[years.length - 1]}` }));
+  // Author position mix: first / middle / last (solo papers count as first).
+  const mid = Math.max(total - first - last, 0);
+  const stack = el('div', { class: 'stack' });
+  const legend = el('div', { class: 'legend' });
+  [['First author', first, '--c1'], ['Middle', mid, '--c3'], ['Last author', last, '--c2']]
+    .forEach(([label, n, c]) => {
+      if (!n) return;
+      const seg = el('div', { style: { flex: n, background: `var(${c})` } });
+      attachTip(seg, `${label}: ${n} (${pct(n / total, 0)})`);
+      stack.append(seg);
+      legend.append(el('span', { style: { '--sw': `var(${c})` }, text: `${label} ${n}` }));
+    });
+  host.append(stack, legend);
+  const chart = el('div');
+  host.append(chart);
+  const y0 = years[0], y1 = years[years.length - 1];
+  const cols = [];
+  for (let y = y0; y <= y1; y++) cols.push([String(y), perYear.get(y) || 0]);
+  columnChart(chart, cols, { tipFmt: (l, v) => `${l}: ${v} paper${v === 1 ? '' : 's'}` });
+  const tbl = el('table', { style: { marginTop: '.5rem' } },
+    el('thead', {}, el('tr', {}, ...['Year', 'Venue', 'Papers', '1st', 'Last']
+      .map((h, i) => el('th', { class: i > 1 ? 'num' : '', text: h, style: { position: 'static' } })))));
+  const body = el('tbody');
+  for (const v of [...V].reverse()) {
+    const id = v.scope === 'main' ? v.event : `${v.event}+${v.scope}`;
+    const link = el('a', { href: `#${id}`, text: `${v.conf} ${SCOPE_LABELS[v.scope]}` });
+    link.addEventListener('click', closePanel);
+    body.append(el('tr', {}, el('td', { text: v.year }), el('td', {}, link),
+      el('td', { class: 'num', text: v.n }), el('td', { class: 'num', text: v.first }),
+      el('td', { class: 'num', text: v.last })));
+  }
+  tbl.append(body);
+  host.append(tbl);
+  if (p.ambiguous) host.append(el('p', { class: 'muted',
+    text: 'This history is a name bucket and may combine several people.' }));
+}
+
+/* Institution collaboration, from per-paper institution lists (p.inst, p.first_inst). */
+const inc = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+const topEntries = (m, n) => [...m.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, n);
+function instCollab(d) {
+  const nTopics = Object.keys(d.stats.topics || {}).length;
+  const insts = (d.institutions || []).map(() => ({
+    solo: 0, links: 0, partners: new Map(), leads: new Map(), ledBy: new Map(), unknownLead: 0,
+    lastAuthored: 0, lastBy: new Map(), lastUnknown: 0, awards: 0, tracks: new Map(),
+    topics: new Array(nTopics).fill(0), papers: [] }));
+  const pairs = new Map();  // "a,b" (a < b) -> {a, b, n, leadA, leadB, awards}
+  let multi = 0, withInst = 0, firstKnown = 0, lastKnown = 0, multiAuthor = 0;
+  d.papers.forEach((p, idx) => {
+    const ins = p.inst || [];
+    if (!ins.length) return;
+    withInst++;
+    if (ins.length > 1) multi++;
+    const f = p.first_inst, l = p.last_inst, award = !!(p.award && p.award.length);
+    if (f != null) firstKnown++;
+    if (p.authors.length > 1) { multiAuthor++; if (l != null) lastKnown++; }
+    for (const i of ins) {
+      const c = insts[i];
+      c.papers.push(idx);
+      inc(c.tracks, p.track || '');
+      for (const t of p.topics || []) c.topics[t]++;
+      if (award) c.awards++;
+      if (l === i) c.lastAuthored++;
+      if (ins.length === 1) c.solo++;
+      c.links += ins.length - 1;
+      for (const j of ins) if (j !== i) {
+        inc(c.partners, j);
+        if (i === f) inc(c.leads, j);
+      }
+      if (f == null) c.unknownLead++;
+      else if (f !== i) inc(c.ledBy, f);
+      if (f === i && p.authors.length > 1) {
+        if (l == null) c.lastUnknown++; else inc(c.lastBy, l);
+      }
+    }
+    for (let x = 0; x < ins.length; x++) for (let y = x + 1; y < ins.length; y++) {
+      const a = Math.min(ins[x], ins[y]), b = Math.max(ins[x], ins[y]);
+      const k = `${a},${b}`;
+      const r = pairs.get(k) || { a, b, n: 0, leadA: 0, leadB: 0, awards: 0 };
+      r.n++;
+      if (f === a) r.leadA++;
+      if (f === b) r.leadB++;
+      if (award) r.awards++;
+      pairs.set(k, r);
+    }
+  });
+  return { insts, multi, withInst, firstKnown, lastKnown, multiAuthor,
+    pairs: [...pairs.values()].sort((x, y) => y.n - x.n || x.a - y.a || x.b - y.b) };
+}
+
+function barsOrNone(host, rows, empty) {
+  if (rows.length) return hbars(host, rows);
+  host.className = 'muted';
+  host.textContent = empty;
+}
+
+function openInstPanel(x, trigger) {
+  lastFocus = trigger || null;
+  const c = x.collab, names = DATA.institutions.map(i => i.name);
+  $('p-author').hidden = true;
+  $('p-inst').hidden = false;
+  $('panel').setAttribute('aria-label', 'Institution detail');
+  $('p-name').textContent = x.name;
+  $('p-stats').textContent = `${fmt(x.papers)} papers · ${fmt(x.first)} first-authored (${pct(x.lead, 0)}) · ` +
+    `${fmt(x.last)} last-authored · ${fmt(c.solo)} single-institution · ` +
+    `${fmt(c.partners.size)} partner institutions (top 3 = ${pct(x.conc, 0)} of joint links) · ` +
+    `${fmt(x.authors)} authors` + (x.awards ? ` · ${x.awards} awarded` : '');
+  $('p-affs').textContent = x.cc ? countryName(x.cc) : '';
+  $('p-id').textContent = '';
+  barsOrNone($('pi-partners'), topEntries(c.partners, 20).map(([j, n]) => {
+    const led = c.leads.get(j) || 0;
+    return { label: names[j], value: n, ghost: led, text: `${n} · led ${led}`,
+      tip: `${x.name} + ${names[j]}: ${n} papers; ${x.name} first author on ${led}` };
+  }), 'No co-authoring institutions.');
+  const others = x.papers - x.first;
+  $('pi-ledby-sub').textContent = `${fmt(others)} papers where ${x.name} is not first author` +
+    (c.unknownLead ? `; first author's affiliation unknown on ${fmt(c.unknownLead)}.` : '.');
+  barsOrNone($('pi-ledby'), topEntries(c.ledBy, 15).map(([j, n]) => ({
+    label: names[j], value: n, text: `${n} · ${pct(n / others, 0)}`,
+    tip: `${names[j]} first author on ${n} of the ${others} papers` })), 'None.');
+  const firstMulti = [...c.lastBy.values()].reduce((s, v) => s + v, 0) + c.lastUnknown;
+  $('pi-last-sub').textContent = `On its ${fmt(firstMulti)} first-authored papers with 2+ authors, ` +
+    'the last (usually senior) author is from:' +
+    (c.lastUnknown ? ` (unknown on ${fmt(c.lastUnknown)})` : '');
+  barsOrNone($('pi-last'), topEntries(c.lastBy, 12).map(([j, n]) => ({
+    label: j === x.idx ? `${names[j]} (itself)` : names[j], value: n,
+    text: `${n} · ${pct(n / firstMulti, 0)}`,
+    tip: `${names[j]} last author on ${n} of ${x.name}'s ${firstMulti} first-authored papers` })),
+    'No first-authored multi-author papers.');
+  const vol = DATA.stats, tracks = [...c.tracks.entries()].sort((a, b) => b[1] - a[1]);
+  barsOrNone($('pi-tracks'), tracks.map(([t, n]) => ({
+    label: TRACK_LABELS[t] || t || '—', value: n / x.papers, ghost: (vol.track_dist[t] || 0) / vol.papers,
+    text: `${n} · ${pct(n / x.papers, 0)}`,
+    tip: `${pct(n / x.papers)} of ${x.name}'s papers vs ${pct((vol.track_dist[t] || 0) / vol.papers)} overall` })),
+    'No track data.');
+  const topicNames = Object.keys(vol.topics || {});
+  barsOrNone($('pi-topics'), topicNames.map((t, i) => ({ t, n: c.topics[i] })).filter(r => r.n)
+    .sort((a, b) => b.n - a.n).map(({ t, n }) => ({
+      label: t, value: n / x.papers, ghost: vol.topics[t], text: `${n} · ${pct(n / x.papers, 0)}`,
+      tip: `${t}: ${pct(n / x.papers)} of ${x.name}'s papers vs ${pct(vol.topics[t])} overall` })),
+    'No topic matches.');
+  const pubs = $('pi-pubs');
+  pubs.textContent = '';
+  for (const i of c.papers) {
+    const p = DATA.papers[i];
+    const div = el('div', { class: 'pub' },
+      el('a', { href: p.url, target: '_blank', rel: 'noopener', text: p.title }));
+    if (p.track) div.append(el('span', { class: 'badge', text: TRACK_LABELS[p.track] || p.track }));
+    if (p.first_inst === x.idx) div.append(el('span', { class: 'badge', text: '1st author' }));
+    if (p.last_inst === x.idx) div.append(el('span', { class: 'badge', text: 'last author' }));
+    for (const aw of p.award || []) div.append(el('span', { class: 'badge award', text: `🏆 ${aw}` }));
+    const rest = p.inst.filter(j => j !== x.idx)
+      .map(j => names[j] + (j === p.first_inst ? ' (1st)' : j === p.last_inst ? ' (last)' : ''));
+    if (rest.length) div.append(el('span', { class: 'co', text: 'with ' + rest.join(', ') }));
+    pubs.append(div);
+  }
+  $('panel').classList.add('open');
+  $('backdrop').classList.add('open');
+  $('p-close').focus();
+}
+
+/* Institutions */
+function renderInst() {
+  const s = DATA.stats, prev = prevEdition(DATA);
+  $('inst-note').textContent = instView.length
+    ? `Affiliations are self-reported (${pct(s.affiliation_coverage)} of author slots). ` +
+      'They are matched to the Research Organization Registry (ROR), which merges spelling ' +
+      `variants and gives the country (known for ${pct(s.country_coverage)} of slots); ` +
+      'unmatched strings are shown as written. Counts are papers with at least one author ' +
+      'from the institution.'
+    : 'No affiliation data for this volume (the Anthology records affiliations only for newer volumes).';
+  $('inst-chart-box').hidden = !instView.length;
+  $('country-box').hidden = !s.papers_with_country;
+  if (s.papers_with_country) {
+    const pc = s.papers_with_country;
+    $('country-sub').textContent = `Share of the ${fmt(pc)} papers with a known author country ` +
+      `(a paper counts for every country among its authors). ${pct(s.international_share)} ` +
+      'have authors from 2+ countries.' + (prev ? ` Tick = ${DATA.conference} ${prev.year}.` : '');
+    hbars($('countries'), Object.entries(s.country_dist).slice(0, 15).map(([cc, v]) => {
+      const pv = prev?.countries?.[cc];
+      return { label: countryLabel(cc), value: v / pc, ghost: pv, text: `${fmt(v)} · ${pct(v / pc, 0)}`,
+        tip: `${countryName(cc)}: ${fmt(v)} papers (${pct(v / pc)})` +
+          (pv != null ? `; ${pct(pv)} in ${prev.year}` : '') };
+    }));
+  }
+  if (instView.length) hbars($('inst-chart'), instView.slice(0, 20).map(x => ({
+    label: x.name, value: x.papers, ghost: x.first,
+    text: `${fmt(x.papers)} · ${pct(x.share)} · lead ${pct(x.lead, 0)}`,
+    tip: `${x.name}: ${x.papers} papers, ${x.first} first-authored (${pct(x.lead)}), ` +
+      `${x.authors} authors; top partner ${x.partner || '—'}`,
+  })));
+
+  const q = $('iq').value.trim().toLowerCase();
+  const min = +$('imin').value || 1;
+  const rows = sortRows(instView.filter(x => x.papers >= min && x.name.toLowerCase().includes(q)),
+    isortKey, isortDir);
+  markSort('data-ik', isortKey, isortDir);
+  $('icount').textContent = instView.length ? `${fmt(rows.length)} institutions` : '';
+  const tbody = $('irows');
+  tbody.textContent = '';
+  if (!rows.length) return instView.length ? emptyRow(tbody, 13, 'No institutions match.') : undefined;
+  for (const x of rows.slice(0, 2000)) {
+    const btn = el('button', { class: 'name-btn', text: x.name });
+    btn.addEventListener('click', () => openInstPanel(x, btn));
+    tbody.append(el('tr', {},
+      el('td', { text: x.rank }), el('td', {}, btn), el('td', { text: countryLabel(x.cc) }),
+      el('td', { class: 'num', text: x.papers }), el('td', { class: 'num', text: pct(x.share) }),
+      el('td', { class: 'num', text: x.first }), el('td', { class: 'num', text: pct(x.lead, 0) }),
+      el('td', { class: 'num', text: x.last }),
+      el('td', { class: 'num', text: pct(x.solo, 0) }),
+      el('td', { text: x.partner ? `${x.partner} (${x.partnerN})` : '—' }),
+      el('td', { class: 'num', text: x.collab.links ? pct(x.conc, 0) : '—' }),
+      el('td', { class: 'num', text: x.awards || '' }),
+      el('td', { class: 'num', text: x.authors })));
+  }
+}
+
+/* Collaboration tab */
+function renderCollab() {
+  const s = DATA.stats, names = DATA.institutions.map(i => i.name);
+  const has = PAIRS.length > 0;
+  const known = INST_STATS;
+  $('collab-note').textContent = instView.length
+    ? `Built from ROR-matched affiliations (${pct(s.affiliation_coverage)} of author slots). ` +
+      `The first author's institution is known on ${fmt(known.firstKnown)} of ${fmt(INST_WITH)} papers ` +
+      `with any matched affiliation, the last author's on ${fmt(known.lastKnown)} of ` +
+      `${fmt(known.multiAuthor)} multi-author ones, so lead and last-author counts are lower bounds. ` +
+      'Click an institution in the network or the Institutions table for its partners.'
+    : 'No affiliation data for this volume (the Anthology records affiliations only for newer volumes).';
+  for (const id of ['pairs-box', 'net-box', 'cpairs-box', 'pt-box']) $(id).hidden = !has;
+  if (has) {
+    $('pairs-sub').textContent = `${pct(INST_MULTI / INST_WITH)} of the ${fmt(INST_WITH)} papers with a ` +
+      'matched affiliation involve 2+ institutions. Most frequent co-authoring pairs, leading partner ' +
+      'first; value = joint papers · led by first / led by second / other or unknown; tick = led by first.';
+    hbars($('pairs'), PAIRS.slice(0, 20).map(r => {
+      const [p, q, lp, lq] = r.leadB > r.leadA ? [r.b, r.a, r.leadB, r.leadA] : [r.a, r.b, r.leadA, r.leadB];
+      return { label: `${names[p]} + ${names[q]}`, value: r.n, ghost: lp,
+        text: `${r.n} · ${lp}/${lq}/${r.n - lp - lq}`,
+        tip: `${names[p]} + ${names[q]}: ${r.n} papers; first author from ${names[p]} on ${lp}, ` +
+          `${names[q]} on ${lq}, elsewhere/unknown on ${r.n - lp - lq}` +
+          (r.awards ? `; ${r.awards} awarded` : '') };
+    }));
+    renderNetwork();
+    renderCountryPairs();
+    renderPairTrends();
+  }
+  renderAuthorTeams();
+  renderAwards();
+}
+
+/* Force-directed graph of the top institutions; edges = shared papers. */
+function renderNetwork() {
+  const host = $('net');
+  host.textContent = '';
+  const N = +$('net-n').value, min = Math.max(1, +$('net-min').value || 1);
+  const nodes = instView.slice(0, N);
+  const at = new Map(nodes.map((x, i) => [x.idx, i]));
+  const edges = PAIRS.filter(r => r.n >= min && at.has(r.a) && at.has(r.b))
+    .map(r => ({ s: at.get(r.a), t: at.get(r.b), w: r.n }));
+  const deg = nodes.map(() => 0);
+  for (const e of edges) { deg[e.s]++; deg[e.t]++; }
+  $('net-sub').textContent = `The ${nodes.length} institutions with most papers; a line joins two that ` +
+    `share ≥${min} paper${min > 1 ? 's' : ''} (${fmt(edges.length)} links; thicker = more). ` +
+    'Node size = papers; colour = country. Click a node for details.';
+  // Deterministic layout: sunflower start, then spring/repulsion iterations.
+  const P = nodes.map((_, i) => ({ x: Math.cos(i * 2.39996) * 30 * Math.sqrt(i + 1),
+    y: Math.sin(i * 2.39996) * 30 * Math.sqrt(i + 1) }));
+  const maxW = Math.max(1, ...edges.map(e => e.w));
+  for (let it = 0; it < 400; it++) {
+    const cool = 1 - it / 400, F = P.map(() => ({ x: 0, y: 0 }));
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const dx = P[i].x - P[j].x, dy = P[i].y - P[j].y, d2 = Math.max(dx * dx + dy * dy, 25);
+      const f = 20000 / d2, d = Math.sqrt(d2);
+      F[i].x += f * dx / d; F[i].y += f * dy / d; F[j].x -= f * dx / d; F[j].y -= f * dy / d;
+    }
+    for (const e of edges) {
+      const a = P[e.s], b = P[e.t], dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const f = (d - 90) * 0.02 * (0.5 + e.w / maxW);
+      F[e.s].x += f * dx / d; F[e.s].y += f * dy / d; F[e.t].x -= f * dx / d; F[e.t].y -= f * dy / d;
+    }
+    P.forEach((p, i) => {
+      F[i].x -= p.x * 0.02; F[i].y -= p.y * 0.02;
+      const m = Math.hypot(F[i].x, F[i].y) || 1, step = Math.min(m, 20 * cool + 1);
+      p.x += F[i].x / m * step; p.y += F[i].y / m * step;
+    });
+  }
+  const W = 900, H = 600, pad = 40;
+  const xs = P.map(p => p.x), ys = P.map(p => p.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const sc = Math.min((W - 2 * pad) / (x1 - x0 || 1), (H - 2 * pad) / (y1 - y0 || 1));
+  const X = v => pad + (v - x0) * sc + ((W - 2 * pad) - (x1 - x0) * sc) / 2;
+  const Y = v => pad + (v - y0) * sc + ((H - 2 * pad) - (y1 - y0) * sc) / 2;
+  const maxP = Math.max(1, ...nodes.map(x => x.papers));
+  const ccs = Object.entries(nodes.reduce((m, x) => (x.cc && (m[x.cc] = (m[x.cc] || 0) + x.papers), m), {}))
+    .sort((a, b) => b[1] - a[1]).slice(0, CONF_COLORS.length).map(([cc]) => cc);
+  const col = cc => ccs.includes(cc) ? `var(${CONF_COLORS[ccs.indexOf(cc)]})` : 'var(--muted)';
+  $('net-legend').replaceChildren(...ccs.map(cc => el('span', { style: { '--sw': col(cc) }, text: countryName(cc) })),
+    el('span', { style: { '--sw': 'var(--muted)' }, text: 'other / unknown' }));
+  const svg = el('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img',
+    'aria-label': 'Institution collaboration network' });
+  for (const e of edges) {
+    const ln = el('line', { x1: X(P[e.s].x), y1: Y(P[e.s].y), x2: X(P[e.t].x), y2: Y(P[e.t].y),
+      stroke: 'currentColor', opacity: 0.12 + 0.5 * e.w / maxW, 'stroke-width': 0.8 + 5 * e.w / maxW });
+    attachTip(ln, `${nodes[e.s].name} + ${nodes[e.t].name}: ${e.w} papers`);
+    svg.append(ln);
+  }
+  nodes.forEach((x, i) => {
+    const r = 4 + 14 * Math.sqrt(x.papers / maxP);
+    const c = el('circle', { class: 'pt', cx: X(P[i].x), cy: Y(P[i].y), r, fill: col(x.cc),
+      stroke: 'var(--card)', 'stroke-width': 1.5, style: { cursor: 'pointer' } });
+    attachTip(c, `${x.name}: ${x.papers} papers, lead ${pct(x.lead, 0)}, ${deg[i]} links shown`);
+    c.addEventListener('click', () => openInstPanel(x, null));
+    svg.append(c);
+  });
+  nodes.forEach((x, i) => {
+    if (i >= 18) return;
+    svg.append(el('text', { x: X(P[i].x), y: Y(P[i].y) - 6 - 14 * Math.sqrt(x.papers / maxP),
+      'text-anchor': 'middle', style: { fill: 'var(--fg)', pointerEvents: 'none' },
+      text: x.name.length > 28 ? x.name.slice(0, 27) + '…' : x.name }));
+  });
+  host.append(svg);
+}
+
+function renderCountryPairs() {
+  const ccOf = DATA.institutions.map(i => i.country);
+  const pairs = new Map();
+  let intl = 0;
+  for (const p of DATA.papers) {
+    const ccs = [...new Set((p.inst || []).map(i => ccOf[i]).filter(Boolean))].sort();
+    if (ccs.length < 2) continue;
+    intl++;
+    const lead = p.first_inst != null ? ccOf[p.first_inst] : null;
+    for (let i = 0; i < ccs.length; i++) for (let j = i + 1; j < ccs.length; j++) {
+      const k = `${ccs[i]},${ccs[j]}`;
+      const r = pairs.get(k) || { a: ccs[i], b: ccs[j], n: 0, leadA: 0, leadB: 0 };
+      r.n++;
+      if (lead === r.a) r.leadA++;
+      if (lead === r.b) r.leadB++;
+      pairs.set(k, r);
+    }
+  }
+  const top = [...pairs.values()].sort((x, y) => y.n - x.n || x.a.localeCompare(y.a)).slice(0, 20);
+  $('cpairs-sub').textContent = `${fmt(intl)} papers have matched institutions in 2+ countries. ` +
+    'Most frequent country pairs, leading country first; value = papers · led by first / second / ' +
+    'other or unknown; tick = led by first.';
+  barsOrNone($('cpairs'), top.map(r => {
+    const [p, q, lp, lq] = r.leadB > r.leadA ? [r.b, r.a, r.leadB, r.leadA] : [r.a, r.b, r.leadA, r.leadB];
+    return { label: `${countryName(p)} + ${countryName(q)}`, value: r.n, ghost: lp,
+      text: `${r.n} · ${lp}/${lq}/${r.n - lp - lq}`,
+      tip: `${countryName(p)} + ${countryName(q)}: ${r.n} papers; first author from ${countryName(p)} ` +
+        `on ${lp}, ${countryName(q)} on ${lq}` };
+  }), 'No international papers with matched affiliations.');
+}
+
+async function loadInstTrends() {
+  if (!INST_TRENDS) INST_TRENDS = await loadJSON('data/inst_trends.json');
+  return INST_TRENDS;
+}
+
+async function renderPairTrends() {
+  let all;
+  try { all = await loadInstTrends(); }
+  catch (e) { $('pt-sub').textContent = 'data/inst_trends.json missing — run python stats.py.'; return; }
+  const scope = scopeOf(), conf = DATA.conference, t = all[scope]?.[conf];
+  const host = $('pt-chart');
+  if (!t || !t.pairs?.length) {
+    host.textContent = ''; $('pt-legend').textContent = '';
+    $('pt-sub').textContent = `No institution pairs for ${conf} (${SCOPE_LABELS[scope]}).`;
+    return;
+  }
+  const q = $('pt-q').value.trim().toLowerCase(), n = +$('pt-n').value;
+  const picked = t.pairs.filter(x => !q || `${x.a} ${x.b}`.toLowerCase().includes(q)).slice(0, n);
+  const cov = new Map(byScope(scope).filter(e => e.conference === conf)
+    .map(e => [String(e.year), e.affiliation_coverage]));
+  const skipped = t.years.filter(y => (cov.get(y) ?? 0) < MIN_COVERAGE);
+  $('pt-sub').textContent = `${conf}, ${SCOPE_LABELS[scope]}: joint papers per year for the ${t.pairs.length} ` +
+    'pairs with most joint papers across all years.' +
+    (skipped.length ? ` Left out (under ${pct(MIN_COVERAGE, 0)} affiliation coverage): ${skipped.join(', ')}.` : '');
+  const color = i => `hsl(${(i * 360 / picked.length + 220) % 360} 65% 58%)`;
+  $('pt-legend').replaceChildren(...picked.map((x, i) =>
+    el('span', { style: { '--sw': color(i) }, text: `${x.a} + ${x.b}` })));
+  lineChart(host, picked.map((x, i) => ({ name: `${x.a} + ${x.b}`, color: color(i),
+    points: t.years.map((y, j) => [+y, skipped.includes(y) ? null : x.counts[j]]) })));
+}
+
+function renderAuthorTeams() {
+  const pairs = new Map(), trios = new Map();
+  for (const p of DATA.papers) {
+    const a = [...p.authors].sort();
+    if (a.length > 25) continue;  // consortium papers would swamp the counts
+    for (let i = 0; i < a.length; i++) for (let j = i + 1; j < a.length; j++) {
+      inc(pairs, `${a[i]}\t${a[j]}`);
+      for (let k = j + 1; k < a.length; k++) inc(trios, `${a[i]}\t${a[j]}\t${a[k]}`);
+    }
+  }
+  const label = k => k.split('\t').map(x => AUTHORS.get(x)?.name ?? x).join(' + ');
+  const rows = m => [...m.entries()].filter(([, n]) => n >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).slice(0, 15)
+    .map(([k, n]) => ({ label: label(k), value: n, text: `${n} papers`, tip: `${label(k)}: ${n} joint papers` }));
+  barsOrNone($('apairs'), rows(pairs), 'No pair co-authored 2+ papers.');
+  barsOrNone($('atrios'), rows(trios), 'No trio co-authored 2+ papers.');
+}
+
+function renderAwards() {
+  const s = DATA.stats, names = DATA.institutions.map(i => i.name);
+  $('awards-box').hidden = !s.award_papers || !instView.length;
+  if ($('awards-box').hidden) return;
+  const insts = instView.filter(x => x.awards).sort((a, b) => b.awards - a.awards || a.rank - b.rank);
+  $('aw-inst-sub').textContent = `${fmt(s.award_papers)} awarded papers (${pct(s.award_papers / s.papers)} of ` +
+    'all). Institutions on awarded papers; value = awarded · award rate of its papers. ' +
+    'Small counts: read rates with care.';
+  barsOrNone($('aw-inst'), insts.slice(0, 20).map(x => ({
+    label: x.name, value: x.awards, text: `${x.awards} · ${pct(x.awards / x.papers, 0)}`,
+    tip: `${x.name}: ${x.awards} of ${x.papers} papers awarded` })), 'No awarded paper has a matched affiliation.');
+  barsOrNone($('aw-pairs'), PAIRS.filter(r => r.awards)
+    .sort((a, b) => b.awards - a.awards || b.n - a.n).slice(0, 15).map(r => ({
+      label: `${names[r.a]} + ${names[r.b]}`, value: r.awards, text: `${r.awards} / ${r.n}`,
+      tip: `${names[r.a]} + ${names[r.b]}: ${r.awards} of ${r.n} joint papers awarded` })),
+    'No awarded paper involves 2+ matched institutions.');
+}
+
+/* Topics */
+function renderTopics() {
+  const s = DATA.stats, prev = prevEdition(DATA);
+  $('topics-sub').textContent = prev
+    ? `Share of ${DATA.conference} ${DATA.year} papers; tick = ${DATA.conference} ${prev.year}.`
+    : `Share of ${DATA.conference} ${DATA.year} papers.`;
+  const topics = Object.entries(s.topics || {}).sort((a, b) => b[1] - a[1]);
+  hbars($('topics'), topics.map(([k, v]) => {
+    const pv = prev && prev.topics ? prev.topics[k] : null;
+    return { label: k, value: v, ghost: pv, text: pct(v, 0),
+      tip: pv != null ? `${k}: ${pct(v)} (was ${pct(pv)} in ${prev.year})` : `${k}: ${pct(v)}` };
+  }), 1);
+  const terms = $('terms');
+  terms.textContent = '';
+  const tt = s.top_terms || [];
+  const max = tt.length ? tt[0][1] : 1;
+  for (const [w, c] of tt) {
+    terms.append(el('span', { style: { fontSize: `${0.8 + 1.1 * Math.sqrt(c / max)}rem`,
+      opacity: 0.55 + 0.45 * c / max } }, w, el('small', { text: c })));
+  }
+}
+
+/* Trends */
+const METRICS = [
+  ['papers', 'Papers', fmt, false],
+  ['unique_authors', 'Unique authors', fmt, false],
+  ['avg_authors_per_paper', 'Average authors per paper', v => v.toFixed(1), false],
+  ['median_authors_per_paper', 'Median authors per paper', v => v.toFixed(1), false],
+  ['single_author_share', 'Single-author paper share', v => pct(v, 1), true],
+  ['newcomer_share', 'Newcomer author share', v => pct(v, 0), true],
+  ['largest_component_share', 'Largest co-authorship component', v => pct(v, 0), true],
+  ['top1pct_author_slot_share', 'Slots held by top 1% of authors', v => pct(v, 1), true],
+  ['affiliation_coverage', 'Affiliation coverage', v => pct(v, 0), true],
+  ['international_share', 'Papers with authors from 2+ countries', v => pct(v, 0), true],
+  ['country_coverage', 'Author slots with a known country', v => pct(v, 0), true],
+];
+const METRIC_NOTES = {
+  newcomer_share: 'People absent from every tracked dataset of an earlier year in this scope (2020 has no baseline).',
+  largest_component_share: 'Share of authors inside the biggest connected co-authorship cluster.',
+  international_share: 'Among papers with at least one author whose country is known (affiliations matched to ROR).',
+};
+
+function buildTrendControls() {
+  const ms = $('trend-metric');
+  ms.textContent = '';
+  for (const [k, label] of METRICS) ms.append(el('option', { value: k, text: label }));
+  for (const t of Object.keys(INDEX[0].topics || {}))
+    ms.append(el('option', { value: `topic:${t}`, text: `Topic: ${t}` }));
+  // The 12 countries with the largest summed share across datasets.
+  const tot = new Map();
+  for (const e of INDEX) for (const [cc, v] of Object.entries(e.countries || {}))
+    tot.set(cc, (tot.get(cc) || 0) + v);
+  for (const [cc] of [...tot].sort((a, b) => b[1] - a[1]).slice(0, 12))
+    ms.append(el('option', { value: `country:${cc}`, text: `Country: ${countryName(cc)}` }));
+  const sel = $('trend-conf');
+  sel.textContent = '';
+  for (const c of new Set(INDEX.map(e => e.conference))) sel.append(el('option', { value: c, text: c }));
+}
+
+function renderTrends() {
+  const key = $('trend-metric').value;
+  let label, f, isPct, get;
+  if (key.startsWith('topic:')) {
+    const t = key.slice(6);
+    label = `Topic share: ${t}`; f = v => pct(v, 0); isPct = true;
+    get = e => (e.topics || {})[t] ?? null;
+  } else if (key.startsWith('country:')) {
+    const cc = key.slice(8);
+    label = `Share of papers with an author from ${countryName(cc)}`; f = v => pct(v, 0); isPct = true;
+    get = e => e.country_coverage >= MIN_COVERAGE ? (e.countries || {})[cc] ?? 0 : null;
+  } else {
+    [, label, f, isPct] = METRICS.find(m => m[0] === key);
+    get = e => e[key] ?? null;
+  }
+  $('trend-title').textContent = label;
+  $('trend-sub').textContent = (METRIC_NOTES[key] || 'One line per conference; hover points for values.') +
+    ` Scope: ${SCOPE_LABELS[scopeOf()]}.`;
+  const confs = [...new Set(INDEX.map(e => e.conference))];
+  const series = confs.map(c => ({
+    name: c, color: confColor(c),
+    points: byScope(scopeOf()).filter(e => e.conference === c).sort((a, b) => a.year - b.year)
+      .map(e => [e.year, get(e)]),
+  }));
+  $('trend-legend').replaceChildren(...confs.map(c =>
+    el('span', { style: { '--sw': confColor(c) }, text: c })));
+  lineChart($('trend-chart'), series, { yFmt: f, pctAxis: isPct });
+
+  const conf = $('trend-conf').value;
+  const rows = byScope(scopeOf()).filter(e => e.conference === conf).sort((a, b) => a.year - b.year);
+  const topics = Object.keys(rows[0]?.topics || {});
+  const heat = $('heat');
+  heat.textContent = '';
+  heat.append(el('thead', {}, el('tr', {}, el('th', { text: 'Topic' }),
+    ...rows.map(r => el('th', { text: r.year })))));
+  const max = Math.max(...rows.flatMap(r => Object.values(r.topics || {})), 0.01);
+  const body = el('tbody');
+  for (const t of topics) {
+    body.append(el('tr', {}, el('td', { text: t }), ...rows.map(r => {
+      const v = r.topics[t];
+      const a = Math.round(v / max * 85);
+      return el('td', { class: 'cell', title: `${t}, ${conf} ${r.year}: ${pct(v)}`, text: pct(v, 0),
+        style: { background: `color-mix(in srgb, var(--accent) ${a}%, transparent)`,
+          color: a > 50 ? '#fff' : 'var(--fg)' } });
+    })));
+  }
+  heat.append(body);
+  renderInstTrends();
+}
+
+async function renderInstTrends() {
+  if (!INST_TRENDS) {
+    try { INST_TRENDS = await loadJSON('data/inst_trends.json'); }
+    catch (e) { $('it-sub').textContent = 'data/inst_trends.json missing — run python stats.py.'; return; }
+  }
+  const conf = $('trend-conf').value, scope = scopeOf();
+  const t = INST_TRENDS[scope]?.[conf];
+  const host = $('it-chart');
+  if (!t || !t.institutions.length) {
+    host.textContent = ''; $('it-legend').textContent = '';
+    $('it-sub').textContent = `No affiliation data for ${conf} (${SCOPE_LABELS[scope]}).`;
+    return;
+  }
+  const share = $('it-share').checked;
+  const q = $('it-q').value.trim().toLowerCase();
+  const n = +$('it-n').value;
+  const picked = t.institutions.filter(x => !q || x.name.toLowerCase().includes(q)).slice(0, n);
+  const cov = new Map(byScope(scope).filter(e => e.conference === conf)
+    .map(e => [String(e.year), e.affiliation_coverage]));
+  const covered = y => (cov.get(y) ?? 0) >= MIN_COVERAGE;
+  const skipped = t.years.filter(y => !covered(y));
+  $('it-sub').textContent = `${conf}, ${SCOPE_LABELS[scope]}: the ${t.institutions.length} institutions ` +
+    'with most papers overall; ' + (share ? 'share of each year\'s papers' : 'papers per year') + '.' +
+    (skipped.length ? ` Left out (under ${pct(MIN_COVERAGE, 0)} of author slots have an affiliation): ` +
+      `${skipped.join(', ')}.` : '');
+  const color = i => `hsl(${(i * 360 / picked.length + 220) % 360} 65% 58%)`;
+  const series = picked.map((x, i) => ({
+    name: x.name, color: color(i),
+    points: t.years.map((y, j) => [+y, !covered(y) ? null
+      : share ? x.counts[j] / t.papers[y] : x.counts[j]]),
+  }));
+  $('it-legend').replaceChildren(...picked.map((x, i) =>
+    el('span', { style: { '--sw': color(i) },
+      text: `${x.name}${x.country ? ` (${countryName(x.country)})` : ''}` })));
+  lineChart(host, series, share ? { yFmt: v => pct(v, 1), pctAxis: true } : {});
+}
+
+/* Wiring */
+function syncHeaderOffset() {
+  document.documentElement.style.setProperty('--hdr', `${$('hdr').offsetHeight}px`);
+}
+new ResizeObserver(syncHeaderOffset).observe($('hdr'));
+
+$('q').addEventListener('input', render);
+$('min').addEventListener('input', render);
+document.querySelectorAll('th[data-k]').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.k;
+  if (sortKey === k) sortDir *= -1;
+  else { sortKey = k; sortDir = ['papers', 'first', 'ncoauth'].includes(k) ? -1 : 1; }
+  render();
+}));
+document.querySelectorAll('th[data-ik]').forEach(th => th.addEventListener('click', () => {
+  const k = th.dataset.ik;
+  if (isortKey === k) isortDir *= -1;
+  else { isortKey = k; isortDir = ['name', 'rank', 'country', 'partner'].includes(k) ? 1 : -1; }
+  renderInst();
+}));
+document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+  activeTab = t.dataset.tab;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  for (const v of ['overview', 'authors', 'inst', 'collab', 'topics', 'trends'])
+    $(`view-${v}`).hidden = activeTab !== v;
+  if (activeTab === 'trends') {
+    if (DATA) $('trend-conf').value = DATA.conference;
+    renderTrends();
+  }
+}));
+$('iq').addEventListener('input', renderInst);
+$('imin').addEventListener('input', renderInst);
+$('trend-conf').addEventListener('change', renderTrends);
+$('trend-metric').addEventListener('change', renderTrends);
+for (const id of ['it-q', 'it-n', 'it-share'])
+  $(id).addEventListener(id === 'it-q' ? 'input' : 'change', renderInstTrends);
+$('net-n').addEventListener('change', renderNetwork);
+$('net-min').addEventListener('input', renderNetwork);
+$('pt-q').addEventListener('input', renderPairTrends);
+$('pt-n').addEventListener('change', renderPairTrends);
+$('p-close').addEventListener('click', closePanel);
+$('backdrop').addEventListener('click', closePanel);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
+window.addEventListener('hashchange', () => {
+  const id = location.hash.slice(1);
+  if (id && id !== currentId && INDEX.some(e => e.id === id)) selectVolume(id, false);
+});
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+# Python / tooling caches
+__pycache__/
+*.pyc
+.ruff_cache/
+
+# Downloaded inputs (re-fetched automatically by stats.py / refs.py)
+xml/
+ref/
