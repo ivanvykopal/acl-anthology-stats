@@ -483,6 +483,8 @@ def _index_entry(data: dict) -> dict:
         "largest_component_share": s["largest_component_share"],
         "top1pct_author_slot_share": s["top1pct_author_slot_share"],
         "topics": s["topics"],
+        # Workshop volumes have one track per workshop; keep the index small.
+        **({"track_dist": s["track_dist"]} if data["scope"] != "workshops" else {}),
     }
 
 

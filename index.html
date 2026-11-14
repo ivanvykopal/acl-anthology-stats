@@ -433,6 +433,13 @@
         <div class="table-wrap"><table id="conf-table"></table></div>
       </div>
       <div class="panel-box">
+        <h2>Accepted tracks over the years</h2>
+        <p class="sub">Main-conference papers by the track (Anthology volume) they were accepted to; hover a cell or bar for the share.</p>
+        <div class="legend" id="conf-tracks-legend"></div>
+        <div id="conf-tracks-chart"></div>
+        <div class="table-wrap" style="margin-top:.8rem"><table id="conf-tracks-table"></table></div>
+      </div>
+      <div class="panel-box">
         <h2 id="conf-metric-h"></h2>
         <p class="sub">Main conference over the years, with Findings and workshops where available.</p>
         <div class="controls"><label>Metric <select id="conf-metric"></select></label></div>
@@ -524,7 +531,7 @@ const byScope = scope => INDEX.filter(e => (e.scope || 'main') === scope);
 const scopeOf = () => (DATA && DATA.scope) || 'main';
 const TRACK_LABELS = { long: 'Long', main: 'Main', short: 'Short', findings: 'Findings',
   demo: 'Demos', demos: 'Demos', srw: 'Student RW', industry: 'Industry',
-  tutorials: 'Tutorials', tutorial: 'Tutorials' };
+  tutorials: 'Tutorials', tutorial: 'Tutorials', 1: 'Single track' };
 
 function el(tag, attrs = {}, ...kids) {
   const ns = ['svg', 'g', 'rect', 'line', 'path', 'text', 'circle', 'title'].includes(tag);
@@ -816,6 +823,58 @@ function selectConference(conf) {
         color: a > 50 ? '#fff' : 'var(--fg)' } });
   })));
   heat.append(tb);
+  renderConfTracks(main);
+}
+
+/* Main-conference papers per accepted track (Anthology volume) and year */
+function renderConfTracks(main) {
+  const label = t => TRACK_LABELS[t] || t;
+  // demo/demos etc. share a label; merge them so a track reads as one row.
+  const dist = r => {
+    const m = {};
+    for (const [k, v] of Object.entries(r.track_dist || {})) m[label(k)] = (m[label(k)] || 0) + v;
+    return m;
+  };
+  const tracks = [...new Set(main.flatMap(r => Object.keys(dist(r))))];
+  const total = new Map(tracks.map(t => [t, main.reduce((s, r) => s + (dist(r)[t] || 0), 0)]));
+  tracks.sort((a, b) => total.get(b) - total.get(a));
+  const color = t => `var(${CONF_COLORS[tracks.indexOf(t) % CONF_COLORS.length]})`;
+  $('conf-tracks-legend').replaceChildren(...tracks.map(t =>
+    el('span', { style: { '--sw': color(t) }, text: label(t) })));
+  const host = $('conf-tracks-chart');
+  host.textContent = '';
+  const W = 900, H = 300, L = 54, R = 16, T = 12, B = 28, iw = W - L - R, ih = H - T - B;
+  const maxV = Math.max(...main.map(r => r.papers), 1);
+  const ticks = niceTicks(maxV), top = ticks[ticks.length - 1];
+  const y = v => T + ih - v / top * ih;
+  const svg = el('svg', { class: 'chart', viewBox: `0 0 ${W} ${H}`, role: 'img' });
+  for (const t of ticks) svg.append(
+    el('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }),
+    el('text', { x: L - 8, y: y(t) + 4, 'text-anchor': 'end', text: fmt(t) }));
+  const bw = iw / main.length, w = Math.min(bw * 0.7, 70);
+  main.forEach((r, i) => {
+    const x = L + i * bw + (bw - w) / 2;
+    let acc = 0;
+    for (const t of tracks) {
+      const v = dist(r)[t] || 0;
+      if (!v) continue;
+      const rect = el('rect', { class: 'bar', x, y: y(acc + v), width: w,
+        height: y(acc) - y(acc + v), fill: color(t) });
+      attachTip(rect, `${r.conference} ${r.year} ${label(t)}: ${fmt(v)} (${pct(v / r.papers)})`);
+      svg.append(rect);
+      acc += v;
+    }
+    svg.append(el('text', { x: x + w / 2, y: H - 8, 'text-anchor': 'middle', text: r.year }));
+  });
+  host.append(svg);
+  const tbl = $('conf-tracks-table');
+  tbl.replaceChildren(el('thead', {}, el('tr', {}, el('th', { text: 'Track' }),
+    ...main.map(r => el('th', { class: 'num', text: r.year })))),
+    el('tbody', {}, ...tracks.map(t => el('tr', {}, el('td', { text: label(t) }),
+      ...main.map(r => {
+        const v = dist(r)[t];
+        return el('td', { class: 'num', title: v ? pct(v / r.papers) : '', text: v ? fmt(v) : '—' });
+      })))));
 }
 
 function renderConfMetric() {
