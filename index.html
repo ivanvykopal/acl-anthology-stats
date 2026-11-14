@@ -248,7 +248,7 @@
       </div>
       <div class="grid2">
         <div class="panel-box">
-          <h2 id="tracks-h">Tracks</h2>
+          <h2 id="tracks-h">Paper types</h2>
           <p class="sub" id="tracks-sub">Share of papers per sub-volume.</p>
           <div id="tracks"></div>
         </div>
@@ -433,8 +433,8 @@
         <div class="table-wrap"><table id="conf-table"></table></div>
       </div>
       <div class="panel-box">
-        <h2>Accepted tracks over the years</h2>
-        <p class="sub">Main-conference papers by the track (Anthology volume) they were accepted to; hover a cell or bar for the share.</p>
+        <h2>Accepted paper types over the years</h2>
+        <p class="sub">Main-conference papers by the type (Anthology volume) they were accepted as; hover a cell or bar for the share.</p>
         <div class="legend" id="conf-tracks-legend"></div>
         <div id="conf-tracks-chart"></div>
         <div class="table-wrap" style="margin-top:.8rem"><table id="conf-tracks-table"></table></div>
@@ -485,7 +485,7 @@
     <h4>Last-author institution</h4>
     <p class="muted" id="pi-last-sub"></p>
     <div id="pi-last"></div>
-    <h4>Track mix</h4>
+    <h4>Paper type mix</h4>
     <p class="muted">Share of its papers per track; tick = share across the whole volume.</p>
     <div id="pi-tracks"></div>
     <h4>Topic profile</h4>
@@ -859,7 +859,7 @@ function renderConfTracks(main) {
       const v = dist(r)[t] || 0;
       if (!v) continue;
       const rect = el('rect', { class: 'bar', x, y: y(acc + v), width: w,
-        height: y(acc) - y(acc + v), fill: color(t) });
+        height: y(acc) - y(acc + v), style: { fill: color(t) } });
       attachTip(rect, `${r.conference} ${r.year} ${label(t)}: ${fmt(v)} (${pct(v / r.papers)})`);
       svg.append(rect);
       acc += v;
@@ -868,7 +868,7 @@ function renderConfTracks(main) {
   });
   host.append(svg);
   const tbl = $('conf-tracks-table');
-  tbl.replaceChildren(el('thead', {}, el('tr', {}, el('th', { text: 'Track' }),
+  tbl.replaceChildren(el('thead', {}, el('tr', {}, el('th', { text: 'Type' }),
     ...main.map(r => el('th', { class: 'num', text: r.year })))),
     el('tbody', {}, ...tracks.map(t => el('tr', {}, el('td', { text: label(t) }),
       ...main.map(r => {
@@ -1066,7 +1066,7 @@ function renderOverview() {
   const td = Object.entries(s.track_dist || {});
   const many = td.length > 8;
   $('tracks-h').textContent = scopeOf() === 'workshops' ? 'Workshops'
-    : scopeOf() === 'all' ? 'Tracks & workshops' : 'Tracks';
+    : scopeOf() === 'all' ? 'Paper types & workshops' : 'Paper types';
   $('tracks-sub').textContent = many ? 'Papers per sub-volume.' : 'Share of papers per sub-volume.';
   if (many) {
     hbars(tracks, td.map(([k, v]) => ({ label: TRACK_LABELS[k] || k, value: v,
