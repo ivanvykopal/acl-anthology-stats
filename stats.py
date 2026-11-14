@@ -37,6 +37,7 @@ VOLUMES = {
     "ACL": ["2026.acl", "2025.acl", "2024.acl", "2023.acl", "2022.acl", "2021.acl", "2020.acl"],
     "NAACL": ["2025.naacl", "2024.naacl", "2022.naacl", "2021.naacl"],
     "COLING": ["2025.coling", "2022.coling", "2020.coling"],
+    "AACL": ["2026.aacl", "2022.aacl", "2020.aacl"],
 }
 
 XML_DIR = Path("xml")
@@ -255,6 +256,8 @@ def build_event(vol_id: str, xml_dir: Path, out_dir: Path,
 
     records = {"main": parse_papers(root), "findings": [], "workshops": []}
     for coll, tracks in coloc.items():
+        if coll == vol_id:  # e.g. 2026.aacl lists its own demo volume as colocated
+            continue
         croot = load_xml(coll, xml_dir)
         if croot is None:
             continue
