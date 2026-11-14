@@ -36,8 +36,11 @@
     color:#fff; display:grid; place-items:center; font-size:.8rem; flex:none; }
   .brand small { display:block; font-weight:400; color:var(--muted); font-size:.72rem; }
   .nav-group { margin-bottom:.9rem; }
-  .nav-conf { font-size:.7rem; font-weight:700; letter-spacing:.08em;
-    text-transform:uppercase; color:var(--muted); padding:.25rem .5rem; }
+  .nav-conf { font-size:.7rem; font-weight:700; letter-spacing:.08em; display:block; width:100%;
+    text-transform:uppercase; color:var(--muted); padding:.25rem .5rem; border:0;
+    background:none; font-family:inherit; text-align:left; cursor:pointer; border-radius:7px; }
+  .nav-conf:hover { background:var(--surface); color:var(--fg); }
+  .nav-conf.active { background:var(--accent-soft); color:var(--accent); }
   .nav-vol { display:flex; justify-content:space-between; width:100%; border:0;
     background:none; color:var(--fg); font:inherit; font-size:.88rem; padding:.3rem .55rem;
     border-radius:7px; cursor:pointer; }
@@ -53,6 +56,7 @@
     text-transform:uppercase; }
   h1 { font-size:1.35rem; margin:.1rem 0 .1rem; letter-spacing:-.01em; line-height:1.3; }
   .muted { color:var(--muted); font-size:.85rem; }
+  .tabs[hidden] { display:none; }
   .tabs { display:flex; gap:.25rem; margin-top:.6rem; overflow-x:auto; }
   .scopes { display:inline-flex; gap:2px; margin-top:.5rem; padding:3px; border-radius:9px;
     background:var(--surface); border:1px solid var(--border); flex-wrap:wrap; }
@@ -414,6 +418,33 @@
         <div id="it-chart"></div>
       </div>
     </section>
+
+    <section id="view-conf" hidden>
+      <div class="cards" id="conf-cards"></div>
+      <div class="panel-box">
+        <h2>Accepted papers per year</h2>
+        <p class="sub">Main conference, Findings and workshops; hover points for values.</p>
+        <div class="legend" id="conf-legend"></div>
+        <div id="conf-papers"></div>
+      </div>
+      <div class="panel-box">
+        <h2>Editions</h2>
+        <p class="sub">Click a year to open its full statistics.</p>
+        <div class="table-wrap"><table id="conf-table"></table></div>
+      </div>
+      <div class="panel-box">
+        <h2 id="conf-metric-h"></h2>
+        <p class="sub">Main conference over the years, with Findings and workshops where available.</p>
+        <div class="controls"><label>Metric <select id="conf-metric"></select></label></div>
+        <div class="legend" id="conf-metric-legend"></div>
+        <div id="conf-metric-chart"></div>
+      </div>
+      <div class="panel-box">
+        <h2>Topic share by year</h2>
+        <p class="sub">Main conference papers matching each topic lexicon.</p>
+        <div style="overflow-x:auto"><table class="heat" id="conf-heat"></table></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -658,7 +689,13 @@ async function init() {
   }
   buildNav();
   buildTrendControls();
-  const id = INDEX.some(e => e.id === location.hash.slice(1)) ? location.hash.slice(1) : INDEX[0].id;
+  const h0 = decodeURIComponent(location.hash.slice(1));
+  if (h0.startsWith('conf:') && INDEX.some(e => e.conference === h0.slice(5))) {
+    await selectVolume(INDEX[0].id, false);
+    selectConference(h0.slice(5));
+    return;
+  }
+  const id = INDEX.some(e => e.id === h0) ? h0 : INDEX[0].id;
   await selectVolume(id, false);
 }
 
@@ -671,17 +708,130 @@ function buildNav() {
     groups.get(e.conference).push(e);
   }
   for (const [conf, vols] of groups) {
-    const g = el('div', { class: 'nav-group' }, el('div', { class: 'nav-conf', text: conf }));
+    const confBtn = el('button', { class: 'nav-conf', 'data-conf': conf, text: conf,
+      title: `${conf} overview across all years` });
+    confBtn.classList.toggle('active', confMode === conf);
+    confBtn.addEventListener('click', () => { location.hash = `conf:${conf}`; });
+    const g = el('div', { class: 'nav-group' }, confBtn);
     for (const e of [...vols].sort((a, b) => b.year - a.year)) {
       const b = el('button', { class: 'nav-vol', 'data-id': e.id },
         el('span', { text: e.year }), el('span', { class: 'n', text: fmt(e.papers) }));
-      b.classList.toggle('active', e.id === currentId);
+      b.classList.toggle('active', !confMode && e.id === currentId);
       b.addEventListener('click', () => { location.hash = e.id; });
       b.addEventListener('pointerenter', () => getDataset(e.id), { once: true });
       g.append(b);
     }
     nav.append(g);
   }
+}
+
+/* Conference overview: all editions of one conference, every scope */
+let confMode = null;
+function selectConference(conf) {
+  confMode = conf;
+  buildNav();
+  closePanel();
+  for (const v of ['overview', 'authors', 'inst', 'collab', 'topics', 'trends'])
+    $(`view-${v}`).hidden = true;
+  $('view-conf').hidden = false;
+  document.querySelector('.tabs').hidden = true;
+  document.querySelectorAll('main .error').forEach(e => e.remove());
+  $('eyebrow').textContent = 'Conference overview';
+  $('title').textContent = `${conf} — all editions`;
+  $('src').textContent = 'Source: ACL Anthology XML';
+  $('scopes').textContent = '';
+  const rows = new Map();  // year -> {scope: entry}
+  for (const e of INDEX.filter(x => x.conference === conf)) {
+    if (!rows.has(e.year)) rows.set(e.year, {});
+    rows.get(e.year)[e.scope || 'main'] = e;
+  }
+  const years = [...rows.keys()].sort((a, b) => a - b);
+  const n = (y, s) => rows.get(y)[s]?.papers ?? null;
+  const totalOf = y => n(y, 'all') ?? n(y, 'main') ?? 0;
+  const sum = s => years.reduce((t, y) => t + (n(y, s) || 0), 0);
+  const peak = years.reduce((b, y) => totalOf(y) > totalOf(b) ? y : b, years[0]);
+  const card = (label, value) => el('div', { class: 'card' },
+    el('span', { class: 'label', text: label }), el('b', { text: value }));
+  const latestMain = [...years].reverse().find(y => n(y, 'main') != null);
+  $('conf-cards').replaceChildren(
+    card('Editions', `${years.length} (${years[0]}–${years[years.length - 1]})`),
+    card('Main papers, total', fmt(sum('main'))),
+    card('Findings papers, total', fmt(sum('findings'))),
+    card('Workshop papers, total', fmt(sum('workshops'))),
+    card('Largest event', `${peak} · ${fmt(totalOf(peak))}`),
+    card('Latest main', latestMain ? `${latestMain} · ${fmt(n(latestMain, 'main'))}` : '—'));
+  const scopes = ['main', 'findings', 'workshops'];
+  const colors = { main: 'var(--c1)', findings: 'var(--c2)', workshops: 'var(--c3)' };
+  $('conf-legend').replaceChildren(...scopes.map(s =>
+    el('span', { style: { '--sw': colors[s] }, text: SCOPE_LABELS[s] })));
+  lineChart($('conf-papers'), scopes.map(s => ({
+    name: SCOPE_LABELS[s], color: colors[s],
+    points: years.map(y => [y, n(y, s)]).filter(p => p[1] != null) })));
+
+  const tbl = $('conf-table');
+  const heads = ['Year', 'Main', 'Findings', 'Workshops', 'Whole event', 'Main authors',
+    'Avg authors/paper', 'Single-author', 'International', 'Newcomers'];
+  tbl.replaceChildren(el('thead', {}, el('tr', {},
+    ...heads.map((h, i) => el('th', { class: i ? 'num' : '', text: h })))));
+  const body = el('tbody');
+  const cell = (v, f = fmt) => el('td', { class: 'num', text: v == null ? '—' : f(v) });
+  for (const y of [...years].reverse()) {
+    const m = rows.get(y).main || rows.get(y).all || {};
+    const link = (s, text) => {
+      const e = rows.get(y)[s];
+      if (!e) return el('td', { class: 'num', text: '—' });
+      return el('td', { class: 'num' }, el('a', { href: `#${e.id}`, text }));
+    };
+    const first = rows.get(y).main || rows.get(y).all;
+    body.append(el('tr', {},
+      el('td', {}, first ? el('a', { href: `#${first.id}`, text: String(y) }) : String(y)),
+      link('main', fmt(n(y, 'main') ?? 0)), link('findings', fmt(n(y, 'findings') ?? 0)),
+      link('workshops', fmt(n(y, 'workshops') ?? 0)), link('all', fmt(totalOf(y))),
+      cell(m.unique_authors), cell(m.avg_authors_per_paper, v => v.toFixed(2)),
+      cell(m.single_author_share, v => pct(v, 0)),
+      cell(m.country_coverage >= MIN_COVERAGE ? m.international_share : null, v => pct(v, 0)),
+      cell(m.newcomer_share, v => pct(v, 0))));
+  }
+  tbl.append(body);
+
+  const ms = $('conf-metric');
+  if (!ms.options.length) {
+    for (const [k, label] of METRICS) ms.append(el('option', { value: k, text: label }));
+    ms.value = 'unique_authors';
+  }
+  renderConfMetric();
+
+  const main = years.map(y => rows.get(y).main).filter(Boolean);
+  const topics = Object.keys(main[0]?.topics || {});
+  const heat = $('conf-heat');
+  heat.textContent = '';
+  heat.append(el('thead', {}, el('tr', {}, el('th', { text: 'Topic' }),
+    ...main.map(r => el('th', { text: r.year })))));
+  const max = Math.max(...main.flatMap(r => Object.values(r.topics || {})), 0.01);
+  const tb = el('tbody');
+  for (const t of topics) tb.append(el('tr', {}, el('td', { text: t }), ...main.map(r => {
+    const v = r.topics[t], a = Math.round(v / max * 85);
+    return el('td', { class: 'cell', title: `${t}, ${conf} ${r.year}: ${pct(v)}`, text: pct(v, 0),
+      style: { background: `color-mix(in srgb, var(--accent) ${a}%, transparent)`,
+        color: a > 50 ? '#fff' : 'var(--fg)' } });
+  })));
+  heat.append(tb);
+}
+
+function renderConfMetric() {
+  if (!confMode) return;
+  const key = $('conf-metric').value;
+  const [, label, f, isPct] = METRICS.find(m => m[0] === key);
+  $('conf-metric-h').textContent = `${label} — ${confMode}`;
+  const scopes = ['main', 'findings', 'workshops'];
+  const colors = { main: 'var(--c1)', findings: 'var(--c2)', workshops: 'var(--c3)' };
+  const series = scopes.map(s => ({
+    name: SCOPE_LABELS[s], color: colors[s],
+    points: byScope(s).filter(e => e.conference === confMode).sort((a, b) => a.year - b.year)
+      .map(e => [e.year, e[key] ?? null]) })).filter(s => s.points.length);
+  $('conf-metric-legend').replaceChildren(...series.map(s =>
+    el('span', { style: { '--sw': s.color }, text: s.name })));
+  lineChart($('conf-metric-chart'), series, { yFmt: f, pctAxis: isPct });
 }
 
 function buildScopes() {
@@ -755,6 +905,11 @@ async function selectVolume(id, push = true) {
     return;
   }
   currentId = id;
+  confMode = null;
+  document.querySelector('.tabs').hidden = false;
+  $('view-conf').hidden = true;
+  for (const v of ['overview', 'authors', 'inst', 'collab', 'topics', 'trends'])
+    $(`view-${v}`).hidden = activeTab !== v;
   if (push && location.hash !== '#' + id) location.hash = id;
   buildNav();
   buildScopes();
@@ -1651,10 +1806,19 @@ $('pt-n').addEventListener('change', renderPairTrends);
 $('p-close').addEventListener('click', closePanel);
 $('backdrop').addEventListener('click', closePanel);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePanel(); });
-window.addEventListener('hashchange', () => {
-  const id = location.hash.slice(1);
-  if (id && id !== currentId && INDEX.some(e => e.id === id)) selectVolume(id, false);
-});
+function route() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (h.startsWith('conf:')) {
+    const c = h.slice(5);
+    if (INDEX.some(e => e.conference === c)) { selectConference(c); return true; }
+  } else if (INDEX.some(e => e.id === h) && (h !== currentId || confMode)) {
+    selectVolume(h, false);
+    return true;
+  }
+  return false;
+}
+window.addEventListener('hashchange', route);
+$('conf-metric').addEventListener('change', renderConfMetric);
 
 init();
 </script>
