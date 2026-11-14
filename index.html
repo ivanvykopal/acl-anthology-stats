@@ -47,6 +47,10 @@
   .nav-vol:hover { background:var(--surface); }
   .nav-vol.active { background:var(--accent-soft); color:var(--accent); font-weight:600; }
   .nav-vol .n { color:var(--muted); font-size:.75rem; font-variant-numeric:tabular-nums; }
+  .nav-more { display:block; width:100%; border:0; background:none; color:var(--accent);
+    font:inherit; font-size:.8rem; text-align:left; padding:.25rem .55rem; border-radius:7px;
+    cursor:pointer; }
+  .nav-more:hover { background:var(--surface); }
 
   /* Main */
   main { padding:0 2rem 3rem; max-width:1240px; min-width:0; }
@@ -711,6 +715,8 @@ async function init() {
   await selectVolume(id, false);
 }
 
+const NAV_LIMIT = 5, NAV_EXPANDED = new Set();
+let navAutoId = null;
 function buildNav() {
   const nav = $('nav');
   nav.textContent = '';
@@ -725,13 +731,30 @@ function buildNav() {
     confBtn.classList.toggle('active', confMode === conf);
     confBtn.addEventListener('click', () => { location.hash = `conf:${conf}`; });
     const g = el('div', { class: 'nav-group' }, confBtn);
-    for (const e of [...vols].sort((a, b) => b.year - a.year)) {
+    const sorted = [...vols].sort((a, b) => b.year - a.year);
+    // A selected edition outside the latest NAV_LIMIT keeps its group open.
+    if (!confMode && navAutoId !== currentId
+        && sorted.findIndex(e => e.id === currentId) >= NAV_LIMIT) {
+      NAV_EXPANDED.add(conf);
+      navAutoId = currentId;
+    }
+    const open = NAV_EXPANDED.has(conf);
+    for (const e of open ? sorted : sorted.slice(0, NAV_LIMIT)) {
       const b = el('button', { class: 'nav-vol', 'data-id': e.id },
         el('span', { text: e.year }), el('span', { class: 'n', text: fmt(e.papers) }));
       b.classList.toggle('active', !confMode && e.id === currentId);
       b.addEventListener('click', () => { location.hash = e.id; });
       b.addEventListener('pointerenter', () => getDataset(e.id), { once: true });
       g.append(b);
+    }
+    if (sorted.length > NAV_LIMIT) {
+      const more = el('button', { class: 'nav-more', 'aria-expanded': String(open),
+        text: open ? 'Show fewer' : `Show ${sorted.length - NAV_LIMIT} more` });
+      more.addEventListener('click', () => {
+        if (open) NAV_EXPANDED.delete(conf); else NAV_EXPANDED.add(conf);
+        buildNav();
+      });
+      g.append(more);
     }
     nav.append(g);
   }
