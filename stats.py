@@ -102,6 +102,22 @@ def _components(n_nodes: int, edges) -> list[int]:
 # to the AACL series; map them onto the AACL conference.
 CONF_OVERRIDE = {"2023.ijcnlp": "AACL", "2025.ijcnlp": "AACL"}
 
+# Pre-2020 events live in old-style collections (P19, D19, N19, C18, I17, ...): output id -> collection.
+# The ID letter gives the series; IJCNLP editions belong to the AACL series like the 2023/2025 ones.
+_LEGACY_YEARS = {
+    ("acl", "P"): range(1979, 2020),
+    ("emnlp", "D"): range(2007, 2020),
+    ("naacl", "N"): [2001, 2003, 2004, 2006, 2007, 2009, 2010, 2012, 2013, 2015, 2016, 2018, 2019],
+    ("coling", "C"): [1965, 1967, 1969, 1973, 1980, 1982, 1986, 1988, 1990, 1992, 1994, 1996,
+                      1998, 2000, 2002, 2004, 2008, 2010, 2012, 2014, 2016, 2018],
+    ("ijcnlp", "I"): [2005, 2008, 2011, 2013, 2017],
+}
+LEGACY_SRC = {f"{y}.{slug}": f"{letter}{y % 100:02d}"
+              for (slug, letter), years in _LEGACY_YEARS.items() for y in years}
+CONF_OVERRIDE.update({f"{y}.ijcnlp": "AACL" for y in _LEGACY_YEARS[("ijcnlp", "I")]})
+for _vid in sorted(LEGACY_SRC, reverse=True):
+    VOLUMES[CONF_OVERRIDE.get(_vid) or _vid.split(".")[1].upper()].append(_vid)
+
 
 def vol_meta(vol_id: str) -> tuple[str, int]:
     m = re.fullmatch(r"(\d{4})\.(.+)", vol_id)
@@ -114,6 +130,7 @@ def vol_meta(vol_id: str) -> tuple[str, int]:
 
 
 def load_xml(vol_id: str, xml_dir: Path) -> Element | None:
+    """Anthology collection XML; `vol_id` is the collection id (2020.acl, P19, W18, ...)."""
     path = xml_dir / f"{vol_id}.xml"
     if not path.exists():
         # HTTPSConnection is HTTPS-only by construction: no `file:` or
@@ -158,19 +175,60 @@ def scoped_id(vol_id: str, scope: str) -> str:
     return vol_id if scope == "main" else f"{vol_id}+{scope}"
 
 
-def colocated(root: Element) -> dict[str, dict[str, str]]:
-    """Co-located volumes from <event><colocated>: collection -> {volume: track label}."""
+NEW_COLL = re.compile(r"\d{4}\.[^-]+")
+OLD_COLL = re.compile(r"[A-Z]\d{2}")
+GENERIC_VENUES = {"ws", "acl", "emnlp", "naacl", "coling", "ijcnlp", "hlt", "conll", "semeval"}
+
+
+def colocated(root: Element, legacy: bool = False) -> dict[str, dict[str, str]]:
+    """Co-located volumes from <event><colocated>: collection -> {volume: track label}.
+
+    Legacy (pre-2020) events also reference old-style collections (W18-51, I05-3); their
+    labels are filled in later from the volume metadata (see workshop_label).
+    """
     out: dict[str, dict[str, str]] = {}
     for el in root.findall("event/colocated/volume-id"):
-        m = re.fullmatch(r"(\d{4}\.[^-]+)-(.+)", (el.text or "").strip())
+        text = (el.text or "").strip()
+        m = re.fullmatch(r"(\d{4}\.[^-]+)-(.+)", text)
+        if not m and legacy:
+            m = re.fullmatch(r"([A-Z]\d{2})-(.+)", text)
         if not m:
             continue
         coll, vol = m.groups()
+        if OLD_COLL.fullmatch(coll):
+            out.setdefault(coll, {})[vol] = ""
+            continue
         name = coll.split(".", 1)[1]
         label = "findings" if name == "findings" else (
             name if vol in ("1", "main") else f"{name}-{vol}")
         out.setdefault(coll, {})[vol] = label
     return out
+
+
+def legacy_type(volume: Element) -> str:
+    """Paper type of a pre-2020 main-conference volume, from its booktitle."""
+    bt = volume.find("meta/booktitle")
+    t = "".join(bt.itertext()).lower() if bt is not None else ""
+    for key, label in (("tutorial", "tutorial"), ("demo", "demo"), ("student", "srw"),
+                       ("industry", "industry"), ("shared task", "shared-task")):
+        if key in t:
+            return label
+    if "short" in t and "long" not in t:
+        return "short"
+    if "long" in t and "short" not in t:
+        return "long"
+    return "main"
+
+
+def workshop_label(coll_root: Element, vol: str) -> str:
+    """Workshop label for an old-style volume: its first non-generic <venue>, else ws-<vol>."""
+    for v in coll_root.findall("volume"):
+        if v.attrib.get("id") == vol:
+            for ve in v.findall("meta/venue"):
+                name = (ve.text or "").strip().lower()
+                if name and name not in GENERIC_VENUES:
+                    return name
+    return f"ws-{vol}"
 
 
 def parse_papers(root: Element, tracks: dict[str, str] | None = None) -> list[dict]:
@@ -243,12 +301,13 @@ def build_event(vol_id: str, xml_dir: Path, out_dir: Path,
                 force: bool = False) -> list[dict]:
     """Build main, Findings, workshops and combined datasets for one conference event."""
     conference, year = vol_meta(vol_id)
-    root = load_xml(vol_id, xml_dir)
+    src = LEGACY_SRC.get(vol_id, vol_id)
+    root = load_xml(src, xml_dir)
     if root is None:
         return []
-    coloc = colocated(root)
+    coloc = colocated(root, src in LEGACY_SRC.values())
     ensure_refs()
-    sources = ([xml_dir / f"{vol_id}.xml"] + [xml_dir / f"{c}.xml" for c in coloc]
+    sources = ([xml_dir / f"{src}.xml"] + [xml_dir / f"{c}.xml" for c in coloc if c != src]
                + [PEOPLE_PATH, ROR_PATH])
     if not force and all(s.exists() for s in sources):
         # The main dataset records which scopes the event produced (COLING has no Findings).
@@ -259,22 +318,36 @@ def build_event(vol_id: str, xml_dir: Path, out_dir: Path,
             print(f"{vol_id}: up to date, skipped")
             return [_index_entry(d) for d in cached if d is not None]
 
-    records = {"main": parse_papers(root), "findings": [], "workshops": []}
+    legacy = vol_id in LEGACY_SRC
+    main_tracks = None
+    if legacy:
+        # Old collections hold the main proceedings, its companion volumes (demos, SRW, ...)
+        # and, for some events, workshops as further volumes of the same collection.
+        ws_vols = set(coloc.get(src, {}))
+        main_tracks = {v.attrib["id"]: legacy_type(v) for v in root.findall("volume")
+                       if v.attrib.get("id") not in ws_vols}
+    records = {"main": parse_papers(root, main_tracks), "findings": [], "workshops": []}
     for coll, tracks in coloc.items():
-        if coll == vol_id:  # e.g. 2026.aacl lists its own demo volume as colocated
+        if coll == src and not legacy:  # e.g. 2026.aacl lists its own demo volume as colocated
             continue
-        croot = load_xml(coll, xml_dir)
+        croot = root if coll == src else load_xml(coll, xml_dir)
         if croot is None:
             continue
+        if not NEW_COLL.fullmatch(coll):
+            tracks = {v: workshop_label(croot, v) for v in tracks}
         scope = "findings" if coll.endswith(".findings") else "workshops"
         records[scope] += parse_papers(croot, tracks)
-    records["all"] = records["main"] + records["findings"] + records["workshops"]
+    # "Whole event" only differs from main when Findings or workshops exist.
+    records["all"] = (records["main"] + records["findings"] + records["workshops"]
+                      if records["findings"] or records["workshops"] else [])
     excluded = {s: sum(1 for r in recs if not is_research(r)) for s, recs in records.items()}
     records = {s: [r for r in recs if is_research(r)] for s, recs in records.items()}
 
     title_el = root.find(".//volume/meta/booktitle")
     main_title = (" ".join("".join(title_el.itertext()).split())
                   if title_el is not None else f"{conference} {year}")
+    if legacy:  # "... (Volume 1: Long Papers)" names one volume of the proceedings
+        main_title = re.sub(r"[\s:,(]*\(?\s*volume[- ].*$", "", main_title, flags=re.I) or main_title
     titles = {
         "main": main_title,
         "findings": f"Findings of {conference} {year}",

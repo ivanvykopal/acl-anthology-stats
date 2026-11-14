@@ -531,7 +531,8 @@ const byScope = scope => INDEX.filter(e => (e.scope || 'main') === scope);
 const scopeOf = () => (DATA && DATA.scope) || 'main';
 const TRACK_LABELS = { long: 'Long', main: 'Main', short: 'Short', findings: 'Findings',
   demo: 'Demos', demos: 'Demos', srw: 'Student RW', industry: 'Industry',
-  tutorials: 'Tutorials', tutorial: 'Tutorials', 1: 'Single track' };
+  tutorials: 'Tutorials', tutorial: 'Tutorials', 1: 'Single track',
+  'shared-task': 'Shared tasks' };
 
 function el(tag, attrs = {}, ...kids) {
   const ns = ['svg', 'g', 'rect', 'line', 'path', 'text', 'circle', 'title'].includes(tag);
@@ -633,7 +634,11 @@ function lineChart(host, series, { yFmt = fmt, pctAxis = false } = {}) {
   for (const t of ticks) svg.append(
     el('line', { class: 'grid', x1: L, x2: W - R, y1: y(t), y2: y(t) }),
     el('text', { x: L - 8, y: y(t) + 4, 'text-anchor': 'end', text: yFmt(t) }));
-  for (const v of xs) svg.append(el('text', { x: x(v), y: H - 8, 'text-anchor': 'middle', text: v }));
+  const xStep = Math.ceil(xs.length / 14);
+  xs.forEach((v, i) => {
+    if (i % xStep === 0 || i === xs.length - 1)
+      svg.append(el('text', { x: x(v), y: H - 8, 'text-anchor': 'middle', text: v }));
+  });
   for (const s of series) {
     const pts = s.points.filter(p => p[1] != null);
     if (!pts.length) continue;
@@ -864,7 +869,8 @@ function renderConfTracks(main) {
       svg.append(rect);
       acc += v;
     }
-    svg.append(el('text', { x: x + w / 2, y: H - 8, 'text-anchor': 'middle', text: r.year }));
+    if (i % Math.ceil(main.length / 14) === 0 || i === main.length - 1)
+      svg.append(el('text', { x: x + w / 2, y: H - 8, 'text-anchor': 'middle', text: r.year }));
   });
   host.append(svg);
   const tbl = $('conf-tracks-table');
@@ -1715,7 +1721,7 @@ const METRICS = [
   ['country_coverage', 'Author slots with a known country', v => pct(v, 0), true],
 ];
 const METRIC_NOTES = {
-  newcomer_share: 'People absent from every tracked dataset of an earlier year in this scope (2020 has no baseline).',
+  newcomer_share: 'People absent from every tracked dataset of an earlier year in this scope (the earliest year has no baseline).',
   largest_component_share: 'Share of authors inside the biggest connected co-authorship cluster.',
   international_share: 'Among papers with at least one author whose country is known (affiliations matched to ROR).',
 };
