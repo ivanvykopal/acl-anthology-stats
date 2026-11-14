@@ -37,7 +37,7 @@ VOLUMES = {
     "ACL": ["2026.acl", "2025.acl", "2024.acl", "2023.acl", "2022.acl", "2021.acl", "2020.acl"],
     "NAACL": ["2025.naacl", "2024.naacl", "2022.naacl", "2021.naacl"],
     "COLING": ["2025.coling", "2022.coling", "2020.coling"],
-    "AACL": ["2026.aacl", "2022.aacl", "2020.aacl"],
+    "AACL": ["2026.aacl", "2025.ijcnlp", "2023.ijcnlp", "2022.aacl", "2020.aacl"],
 }
 
 XML_DIR = Path("xml")
@@ -98,12 +98,17 @@ def _components(n_nodes: int, edges) -> list[int]:
     return sorted(Counter(find(i) for i in range(n_nodes)).values(), reverse=True)
 
 
+# Joint IJCNLP-AACL editions are published under the ijcnlp venue but belong
+# to the AACL series; map them onto the AACL conference.
+CONF_OVERRIDE = {"2023.ijcnlp": "AACL", "2025.ijcnlp": "AACL"}
+
+
 def vol_meta(vol_id: str) -> tuple[str, int]:
     m = re.fullmatch(r"(\d{4})\.(.+)", vol_id)
     if not m:
         raise ValueError(f"bad volume id: {vol_id!r}")
     try:
-        return m.group(2).upper(), int(m.group(1))
+        return CONF_OVERRIDE.get(vol_id, m.group(2).upper()), int(m.group(1))
     except ValueError:
         raise ValueError(f"bad year in volume id: {vol_id!r}") from None
 
@@ -501,7 +506,10 @@ def build_cross(entries: list[dict], out_dir: Path) -> None:
     inst_years: dict[tuple[str, str], dict[str, dict]] = {}
     pair_years: dict[tuple[str, str], dict[tuple[str, str], Counter]] = {}
     for e in entries:
-        d = json.loads((out_dir / f"{e['id']}.json").read_text(encoding="utf-8"))
+        try:
+            d = json.loads((out_dir / f"{e['id']}.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"dataset {e['id']} not built or unreadable: {exc}") from exc
         keys[e["id"]] = {a["key"] for a in d["authors"]}
         bucket = inst_years.setdefault((e["scope"], e["conference"]), {})
         for x in d["institutions"]:
